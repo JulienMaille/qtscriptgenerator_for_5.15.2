@@ -600,6 +600,22 @@ bool Parser::parseNamespace(DeclarationAST *&node)
     {
       namespace_name = token_stream.cursor();
       token_stream.nextToken();
+
+      // C++17 nested-namespace definition: namespace A::B::C { ... }.
+      // The legacy model has no nested-namespace node; consume the trailing
+      // qualifiers so parsing continues inside the outermost namespace instead
+      // of erroring out and losing brace balance (which silently drops every
+      // class parsed afterwards, e.g. QFile/QFileDevice after qspan.h's
+      // "namespace std::ranges"). Contents land in the outer namespace, which
+      // is harmless: nothing bound lives inside these namespaces.
+      while (token_stream.lookAhead() == Token_scope)
+        {
+          token_stream.nextToken(); // '::'
+          if (token_stream.lookAhead() == Token_identifier)
+            token_stream.nextToken();
+          else
+            break;
+        }
     }
 
   if (token_stream.lookAhead() == '=')

@@ -186,6 +186,12 @@ int main(int argc, char *argv[])
     // section of qxml.h), and the parser then silently drops those classes
     // (e.g. QXmlDefaultHandler, needed by QCAD's SVG importer). Strip the
     // leftovers from the preprocessed stream before parsing.
+    //
+    // Qt 6 addition: the same rpp paste bug leaks MAKE_ADL_TEST(begin) after
+    // each expansion of qspan.h's MAKE_ADL_TEST macro (the expansion itself is
+    // emitted correctly, then the original invocation leaks literally). A bare
+    // IDENT(arg) statement desyncs the legacy parser and silently drops every
+    // class parsed afterwards (QFileDevice, QFile, QCryptographicHash, ...).
     {
         QFile pp(pp_file);
         if (pp.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -195,6 +201,10 @@ int main(int argc, char *argv[])
                 "\\bQT_DEPRECATED_VERSION(_X)?_5\\s*\\(\\s*\\d+\\s*\\)\\s*");
             QString cleaned = code;
             cleaned.remove(leftover);
+            QRegularExpression adlLeak(
+                "^[ \\t]*\\bMAKE_ADL_TEST\\s*\\([^()\\n]*\\)[ \\t]*\\r?$",
+                QRegularExpression::MultilineOption);
+            cleaned.remove(adlLeak);
             if (cleaned != code) {
                 QFile::remove(pp_file);
                 QFile out(pp_file);
