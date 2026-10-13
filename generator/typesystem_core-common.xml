@@ -420,6 +420,9 @@
 
   <namespace-type name="Qt">
     <modify-function signature="codecForHtml(const QByteArray &amp;)" remove="all" />
+    <!-- Qt 6: removed (were Q_QDOC/internal in Qt 5) -->
+    <modify-function signature="beginPropertyUpdateGroup()" remove="all" />
+    <modify-function signature="endPropertyUpdateGroup()" remove="all" />
     <modify-function signature="mightBeRichText(const QString &amp;)" remove="all" />
     <modify-function signature="escape(const QString&amp;)" remove="all" />
     <modify-function signature="convertFromPlainText(const QString &amp;, Qt::WhiteSpaceMode)" remove="all" />
@@ -644,10 +647,8 @@
   </enum-type>
 
   <value-type name="QProcessEnvironment" />
-  <value-type name="QBasicTimer">
-    <!-- Qt 6: QBasicTimer is move-only; operator= is deleted -->
-    <modify-function signature="operator=(QBasicTimer)" remove="all"/>
-  </value-type>
+  <!-- Qt 6: QBasicTimer is move-only; deferred (no usable script surface) -->
+  <rejection class="QBasicTimer"/>
   <value-type name="QByteArrayMatcher">
     <modify-function signature="operator=(QByteArrayMatcher)" remove="all"/>
   </value-type>
@@ -969,8 +970,10 @@
   <object-type name="QStateMachine::WrappedEvent" polymorphic-id-expression="%1-&gt;type() == QEvent::Wrapped" />
 
   <object-type name="QCryptographicHash">
-    <!-- Qt 6: operator= is private -->
+    <!-- Qt 6: operator= is private; no default ctor (qscriptvalue_cast
+         default-constructs), so the copy ctor cannot bind either -->
     <modify-function signature="operator=(QCryptographicHash)" remove="all"/>
+    <modify-function signature="QCryptographicHash(const QCryptographicHash&amp;)" remove="all"/>
   </object-type>
   <object-type name="QLibraryInfo"/>
   <object-type name="QBasicMutex"/>
@@ -1236,12 +1239,27 @@
     <!--### Obsolete in 4.3-->
   </object-type>
 
-  <object-type name="QEvent" polymorphic-base="yes" polymorphic-id-expression="%1-&gt;type() == QEvent::None"/>
+  <object-type name="QEvent" polymorphic-base="yes" polymorphic-id-expression="%1-&gt;type() == QEvent::None">
+    <!-- Qt 6: QEvent is neither copyable nor movable -->
+    <modify-function signature="QEvent(const QEvent&amp;)" remove="all"/>
+    <modify-function signature="operator=(QEvent)" remove="all"/>
+  </object-type>
   <object-type name="QChildEvent" polymorphic-id-expression="%1-&gt;type() == QEvent::ChildAdded || %1-&gt;type() == QEvent::ChildPolished || %1-&gt;type() == QEvent::ChildRemoved">
     <modify-field name="c" read="false" write="false"/>
+    <!-- Qt 6: base QEvent is neither copyable nor movable -->
+    <modify-function signature="QChildEvent(const QChildEvent&amp;)" remove="all"/>
+    <modify-function signature="operator=(QChildEvent)" remove="all"/>
   </object-type>
-  <object-type name="QTimerEvent" polymorphic-id-expression="%1-&gt;type() == QEvent::Timer"/>
-  <object-type name="QDynamicPropertyChangeEvent" polymorphic-id-expression="%1-&gt;type() == QEvent::DynamicPropertyChange"/>
+  <object-type name="QTimerEvent" polymorphic-id-expression="%1-&gt;type() == QEvent::Timer">
+    <!-- Qt 6: base QEvent is neither copyable nor movable -->
+    <modify-function signature="QTimerEvent(const QTimerEvent&amp;)" remove="all"/>
+    <modify-function signature="operator=(QTimerEvent)" remove="all"/>
+  </object-type>
+  <object-type name="QDynamicPropertyChangeEvent" polymorphic-id-expression="%1-&gt;type() == QEvent::DynamicPropertyChange">
+    <!-- Qt 6: base QEvent is neither copyable nor movable -->
+    <modify-function signature="QDynamicPropertyChangeEvent(const QDynamicPropertyChangeEvent&amp;)" remove="all"/>
+    <modify-function signature="operator=(QDynamicPropertyChangeEvent)" remove="all"/>
+  </object-type>
 
   <object-type name="QDataStream">
     <modify-function signature="setDevice(QIODevice*)">
@@ -1414,7 +1432,11 @@
 
 
     <value-type name="QXmlStreamAttribute"/>
-    <value-type name="QXmlStreamAttributes"/>
+    <value-type name="QXmlStreamAttributes">
+      <!-- Qt 6: inherited QList::swap models with bare QList arg (template
+           args lost); the emitted qscriptvalue_cast<QList> cannot compile -->
+      <modify-function signature="swap(QList&lt;QXmlStreamAttribute&gt;&amp;)" remove="all"/>
+    </value-type>
     <value-type name="QXmlStreamNamespaceDeclaration"/>
     <value-type name="QXmlStreamNotationDeclaration"/>
     <value-type name="QXmlStreamEntityDeclaration"/>
