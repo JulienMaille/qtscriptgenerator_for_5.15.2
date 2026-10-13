@@ -51,3 +51,4 @@ _pkg/
 # parser repro fixture output
 generator/_ptest/out/
 generator/_ptest/nondet.txt
+/regen-test/

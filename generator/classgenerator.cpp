@@ -1023,7 +1023,7 @@ static void writeEnumClass(QTextStream &stream, const AbstractMetaClass *meta_cl
            << "    else if (var.userType() == qMetaTypeId<" << qualifiedEnumName << ">())" << endl
            << "        out = qvariant_cast<" << qualifiedEnumName << ">(var);" << endl
            << "    else" << endl
-           << "        out = 0;" << endl
+           << "        out = {};" << endl
            << "}" << endl << endl;
 
     // write constructor
@@ -1031,7 +1031,7 @@ static void writeEnumClass(QTextStream &stream, const AbstractMetaClass *meta_cl
            << qtScriptFlagsName
            << "(QScriptContext *context, QScriptEngine *engine)" << endl;
     stream << "{" << endl;
-    stream << "    " << qualifiedFlagsName << " result = 0;" << endl;
+    stream << "    " << qualifiedFlagsName << " result{};" << endl;
     stream << "    if ((context->argumentCount() == 1) && context->argument(0).isNumber()) {" << endl;
     stream << "        result = static_cast<" << qualifiedFlagsName << ">(context->argument(0).toInt32());" << endl;
     stream << "    } else {" << endl;
@@ -1141,6 +1141,25 @@ void maybeDeclareMetaType(QTextStream &stream, const QString &typeName,
         return;
     }
 
+    // Qt 6: a bare container name without template arguments (e.g. "QList"
+    // from decomposing QList<T>) is not a valid metatype; only the full
+    // instantiation can be declared.
+    if (!name.contains(QLatin1Char('<'))
+        && (name == QLatin1String("QList")
+            || name == QLatin1String("QVector")
+            || name == QLatin1String("QMap")
+            || name == QLatin1String("QHash")
+            || name == QLatin1String("QSet")
+            || name == QLatin1String("QPair")
+            || name == QLatin1String("QStack")
+            || name == QLatin1String("QQueue")
+            || name == QLatin1String("QMultiMap")
+            || name == QLatin1String("QLinkedList")
+            || name == QLatin1String("QStringList")))
+    {
+        return;
+    }
+
     if (registeredTypeNames.contains(nameFootPrint) || (QMetaType::fromName(name.toLatin1()).isValid()))
         return;
     if (name.contains(QLatin1Char(','))) {
@@ -1153,9 +1172,9 @@ void maybeDeclareMetaType(QTextStream &stream, const QString &typeName,
                << "    static int qt_metatype_id() \\" << endl
                << "    { \\" << endl
                << "        static QBasicAtomicInt metatype_id = Q_BASIC_ATOMIC_INITIALIZER(0); \\" << endl
-               << "        if (!metatype_id.load()) \\" << endl
-               << "            metatype_id.store(qRegisterMetaType< " << name << " >(\"" << name << "\")); \\" << endl
-               << "        return metatype_id.load(); \\" << endl
+               << "        if (!metatype_id.loadRelaxed()) \\" << endl
+               << "            metatype_id.storeRelaxed(qRegisterMetaType< " << name << " >(\"" << name << "\")); \\" << endl
+               << "        return metatype_id.loadRelaxed(); \\" << endl
                << "    } \\" << endl
                << "};" << endl;
     } else {

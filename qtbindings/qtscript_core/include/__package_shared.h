@@ -12,29 +12,17 @@
 
 Q_DECLARE_METATYPE(QEvent)
 
-namespace QtMetaTypePrivate {
-
-template <>
-inline void *QMetaTypeFunctionHelper<QEvent, true>::Construct(void *where, const void *t)
+// Qt 6: qVariantFromValue() was removed; the generated bindings use it, so
+// provide the shim here (same as qtscriptgenerator-qt6's shared header).
+template <typename T>
+inline QVariant qVariantFromValue(const T &value)
 {
-    if (t)
-        return new (where) QEvent(*static_cast<const QEvent*>(t));
-    return new (where) QEvent(QEvent::None);
-};
-
-
+    return QVariant::fromValue(value);
 }
 
-template <>
-inline QEvent qscriptvalue_cast<QEvent>(const QScriptValue &value)
-{
-    QEvent t(QEvent::None);
-    const int id = qMetaTypeId<QEvent>();
-
-    if (qscriptvalue_cast_helper(value, id, &t))
-        return t;
-
-    return QEvent(QEvent::None);
-}
+// Qt 6: QEvent is neither copyable nor movable, so there is deliberately NO
+// qscriptvalue_cast<QEvent> by-value overload (its `return t` would reference
+// the deleted move ctor). QEvent travels by pointer in the Qt6 bindings;
+// pointer casts use the default template and need no specialization here.
 
 

@@ -1487,7 +1487,14 @@ bool TypeDatabase::parseFile(const QString &filename, bool generate)
                     reader.lineNumber(), reader.columnNumber());
         } else if (reader.isEndElement()) {
             ok = handler.endElement(reader.name().toString());
-        } else if (reader.isCharacters() && !reader.isWhitespace()) {
+        } else if (reader.isCharacters()) {
+            // Qt 6 note: pass ALL character data including whitespace-only
+            // chunks. The SAX parser reported inter-element whitespace via
+            // characters() too and Handler filters by element context
+            // (template/conversion-rule/inject-code collect, everything else
+            // ignores). Skipping whitespace-only chunks here would corrupt
+            // template bodies split by entity references (e.g. &amp;), whose
+            // trailing newline would be lost and glued to the next line.
             ok = handler.characters(reader.text().toString());
         } else if (reader.hasError() && reader.error() != QXmlStreamReader::PrematureEndOfDocumentError) {
             handler.handleError(reader.errorString(), reader.lineNumber(), reader.columnNumber());
