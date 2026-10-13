@@ -1514,6 +1514,14 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
         return 0;
     }
 
+    // Qt 6: Q_GADGET declares a static-assert helper (qt_check_for_QGADGET_macro)
+    // in every gadget class. It has no definition to link against and is never
+    // script API; drop it universally rather than per-class in typesystems.
+    if (function_name == QLatin1String("qt_check_for_QGADGET_macro")) {
+        m_rejected_functions.insert(class_name + "::" + function_name, GenerationDisabled);
+        return 0;
+    }
+
 
     Q_ASSERT(function_item->functionType() == CodeModel::Normal
              || function_item->functionType() == CodeModel::Signal

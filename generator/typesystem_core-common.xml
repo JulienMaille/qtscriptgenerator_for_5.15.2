@@ -422,6 +422,31 @@
     <modify-function signature="codecForHtml(const QByteArray &amp;)" remove="all" />
     <!-- Qt 6: removed (were Q_QDOC/internal in Qt 5) -->
     <modify-function signature="beginPropertyUpdateGroup()" remove="all" />
+    <!-- Qt 6: QTextStream is non-copyable; stream manipulators cannot bind -->
+    <modify-function signature="bin(QTextStream&amp;)" remove="all" />
+    <modify-function signature="bom(QTextStream&amp;)" remove="all" />
+    <modify-function signature="center(QTextStream&amp;)" remove="all" />
+    <modify-function signature="dec(QTextStream&amp;)" remove="all" />
+    <modify-function signature="endl(QTextStream&amp;)" remove="all" />
+    <modify-function signature="fixed(QTextStream&amp;)" remove="all" />
+    <modify-function signature="flush(QTextStream&amp;)" remove="all" />
+    <modify-function signature="forcepoint(QTextStream&amp;)" remove="all" />
+    <modify-function signature="forcesign(QTextStream&amp;)" remove="all" />
+    <modify-function signature="hex(QTextStream&amp;)" remove="all" />
+    <modify-function signature="left(QTextStream&amp;)" remove="all" />
+    <modify-function signature="lowercasebase(QTextStream&amp;)" remove="all" />
+    <modify-function signature="lowercasedigits(QTextStream&amp;)" remove="all" />
+    <modify-function signature="noforcepoint(QTextStream&amp;)" remove="all" />
+    <modify-function signature="noforcesign(QTextStream&amp;)" remove="all" />
+    <modify-function signature="noshowbase(QTextStream&amp;)" remove="all" />
+    <modify-function signature="oct(QTextStream&amp;)" remove="all" />
+    <modify-function signature="reset(QTextStream&amp;)" remove="all" />
+    <modify-function signature="right(QTextStream&amp;)" remove="all" />
+    <modify-function signature="scientific(QTextStream&amp;)" remove="all" />
+    <modify-function signature="showbase(QTextStream&amp;)" remove="all" />
+    <modify-function signature="uppercasebase(QTextStream&amp;)" remove="all" />
+    <modify-function signature="uppercasedigits(QTextStream&amp;)" remove="all" />
+    <modify-function signature="ws(QTextStream&amp;)" remove="all" />
     <modify-function signature="endPropertyUpdateGroup()" remove="all" />
     <modify-function signature="mightBeRichText(const QString &amp;)" remove="all" />
     <modify-function signature="escape(const QString&amp;)" remove="all" />
@@ -971,9 +996,10 @@
 
   <object-type name="QCryptographicHash">
     <!-- Qt 6: operator= is private; no default ctor (qscriptvalue_cast
-         default-constructs), so the copy ctor cannot bind either -->
+         default-constructs), so copy and swap (by-value) cannot bind either -->
     <modify-function signature="operator=(QCryptographicHash)" remove="all"/>
     <modify-function signature="QCryptographicHash(const QCryptographicHash&amp;)" remove="all"/>
+    <modify-function signature="swap(QCryptographicHash&amp;)" remove="all"/>
   </object-type>
   <object-type name="QLibraryInfo"/>
   <object-type name="QBasicMutex"/>
@@ -1435,7 +1461,7 @@
     <value-type name="QXmlStreamAttributes">
       <!-- Qt 6: inherited QList::swap models with bare QList arg (template
            args lost); the emitted qscriptvalue_cast<QList> cannot compile -->
-      <modify-function signature="swap(QList&lt;QXmlStreamAttribute&gt;&amp;)" remove="all"/>
+      <modify-function signature="swap(QList&amp;)" remove="all"/>
     </value-type>
     <value-type name="QXmlStreamNamespaceDeclaration"/>
     <value-type name="QXmlStreamNotationDeclaration"/>
