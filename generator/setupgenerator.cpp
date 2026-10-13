@@ -43,6 +43,9 @@
 #include "reporthandler.h"
 #include "fileout.h"
 
+// Qt 6: endl() lives in namespace Qt since 6.0; restore bare use.
+using Qt::endl;
+
 //#define Q_SCRIPT_LAZY_GENERATOR
 
 void SetupGenerator::addClass(const AbstractMetaClass *cls) 

@@ -48,7 +48,10 @@
 
 #include <memory>
 
-#include <QtXml>
+#include <QXmlStreamReader>
+
+// Qt 6: endl() lives in namespace Qt since 6.0; restore bare use.
+using Qt::endl;
 
 QString strings_Object = QLatin1String("Object");
 QString strings_String = QLatin1String("String");
@@ -133,7 +136,10 @@ class StackElement
     } value;
 };
 
-class Handler : public QXmlDefaultHandler
+// Qt 6: the SAX classes (QXmlDefaultHandler, QXmlSimpleReader, ...) were
+// removed. Handler is now a plain class driven by QXmlStreamReader in
+// TypeDatabase::parseFile() below. All element/attribute logic is unchanged.
+class Handler
 {
 public:
     Handler(TypeDatabase *database, bool generate)
@@ -178,22 +184,19 @@ public:
         tagNames["reference-count"] = StackElement::ReferenceCount;
     }
 
-    bool startElement(const QString &namespaceURI, const QString &localName,
-                      const QString &qName, const QXmlAttributes &atts);
-    bool endElement(const QString &namespaceURI, const QString &localName, const QString &qName);
+    bool startElement(const QString &localName, const QXmlStreamAttributes &atts);
+    bool endElement(const QString &localName);
 
     QString errorString() const { return m_error; }
-    bool error(const QXmlParseException &exception);
-    bool fatalError(const QXmlParseException &exception);
-    bool warning(const QXmlParseException &exception);
+    bool handleError(const QString &message, qint64 line, qint64 column);
 
     bool characters(const QString &ch);
 
 private:
-    void fetchAttributeValues(const QString &name, const QXmlAttributes &atts,
+    void fetchAttributeValues(const QString &name, const QXmlStreamAttributes &atts,
                               QHash<QString, QString> *acceptedAttributes);
 
-    bool importFileElement(const QXmlAttributes &atts);
+    bool importFileElement(const QXmlStreamAttributes &atts);
     bool convertBoolean(const QString &, const QString &, bool);
 
     TypeDatabase *m_database;
@@ -212,37 +215,25 @@ private:
     QHash<QString, StackElement::ElementType> tagNames;
 };
 
-bool Handler::error(const QXmlParseException &e)
+bool Handler::handleError(const QString &message, qint64 line, qint64 column)
 {
-    qWarning("Error: line=%d, column=%d, message=%s\n",
-             e.lineNumber(), e.columnNumber(), qPrintable(e.message()));
+    qWarning("Error: line=%lld, column=%lld, message=%s\n",
+             line, column, qPrintable(message));
     return false;
 }
 
-bool Handler::fatalError(const QXmlParseException &e)
-{
-    qWarning("Fatal error: line=%d, column=%d, message=%s\n",
-             e.lineNumber(), e.columnNumber(), qPrintable(e.message()));
 
-    return false;
-}
 
-bool Handler::warning(const QXmlParseException &e)
-{
-    qWarning("Warning: line=%d, column=%d, message=%s\n",
-             e.lineNumber(), e.columnNumber(), qPrintable(e.message()));
 
-    return false;
-}
 
-void Handler::fetchAttributeValues(const QString &name, const QXmlAttributes &atts,
+void Handler::fetchAttributeValues(const QString &name, const QXmlStreamAttributes &atts,
                                    QHash<QString, QString> *acceptedAttributes)
 {
     Q_ASSERT(acceptedAttributes != 0);
 
-    for (int i=0; i<atts.length(); ++i) {
-        QString key = atts.localName(i).toLower();
-        QString val = atts.value(i);
+    for (int i = 0; i < atts.size(); ++i) {
+        QString key = atts.at(i).qualifiedName().toString().toLower();
+        QString val = atts.at(i).value().toString();
 
         if (!acceptedAttributes->contains(key)) {
             ReportHandler::warning(QString("Unknown attribute for '%1': '%2'").arg(name).arg(key));
@@ -252,7 +243,7 @@ void Handler::fetchAttributeValues(const QString &name, const QXmlAttributes &at
     }
 }
 
-bool Handler::endElement(const QString &, const QString &localName, const QString &)
+bool Handler::endElement(const QString &localName)
 {
     QString tagName = localName.toLower();
     if(tagName == "import-file")
@@ -365,9 +356,9 @@ bool Handler::characters(const QString &ch)
     return true;
 }
 
-bool Handler::importFileElement(const QXmlAttributes &atts)
+bool Handler::importFileElement(const QXmlStreamAttributes &atts)
 {
-    QString fileName = atts.value("name");
+    QString fileName = atts.value("name").toString();
     if(fileName.isEmpty()){
         m_error = "Required attribute 'name' missing for include-file tag.";
         return false;
@@ -382,11 +373,11 @@ bool Handler::importFileElement(const QXmlAttributes &atts)
         }
     }
 
-    QString quoteFrom = atts.value("quote-after-line");
+    QString quoteFrom = atts.value("quote-after-line").toString();
     bool foundFromOk = quoteFrom.isEmpty();
     bool from = quoteFrom.isEmpty();
 
-    QString quoteTo = atts.value("quote-before-line");
+    QString quoteTo = atts.value("quote-before-line").toString();
     bool foundToOk = quoteTo.isEmpty();
     bool to = true;
 
@@ -437,15 +428,14 @@ bool Handler::convertBoolean(const QString &_value, const QString &attributeName
     }
 }
 
-bool Handler::startElement(const QString &, const QString &n,
-                           const QString &, const QXmlAttributes &atts)
+bool Handler::startElement(const QString &n, const QXmlStreamAttributes &atts)
 {
     QString tagName = n.toLower();
     if(tagName == "import-file"){
         return importFileElement(atts);
     }
 
-    std::auto_ptr<StackElement> element(new StackElement(current));
+    std::unique_ptr<StackElement> element(new StackElement(current));
 
     if (!tagNames.contains(tagName)) {
         m_error = QString("Unknown tag name: '%1'").arg(tagName);
@@ -1479,17 +1469,32 @@ bool TypeDatabase::parseFile(const QString &filename, bool generate)
 {
     QFile file(filename);
     Q_ASSERT(file.exists());
-    QXmlInputSource source(&file);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return false;
 
     int count = m_entries.size();
 
-    QXmlSimpleReader reader;
     Handler handler(this, generate);
-
-    reader.setContentHandler(&handler);
-    reader.setErrorHandler(&handler);
-
-    bool ok = reader.parse(&source, false);
+    QXmlStreamReader reader(&file);
+    bool ok = true;
+    while (!reader.atEnd() && ok) {
+        reader.readNext();
+        if (reader.isStartElement()) {
+            ok = handler.startElement(reader.name().toString(), reader.attributes());
+            if (!ok)
+                handler.handleError(handler.errorString().isEmpty()
+                    ? QString("startElement failed") : handler.errorString(),
+                    reader.lineNumber(), reader.columnNumber());
+        } else if (reader.isEndElement()) {
+            ok = handler.endElement(reader.name().toString());
+        } else if (reader.isCharacters() && !reader.isWhitespace()) {
+            ok = handler.characters(reader.text().toString());
+        } else if (reader.hasError() && reader.error() != QXmlStreamReader::PrematureEndOfDocumentError) {
+            handler.handleError(reader.errorString(), reader.lineNumber(), reader.columnNumber());
+            ok = false;
+        }
+    }
+    file.close();
 
     int newCount = m_entries.size();
 

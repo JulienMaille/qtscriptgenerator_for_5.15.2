@@ -47,6 +47,10 @@
 #include <QtCore/QPair>
 
 #include <qdebug.h>
+#include <algorithm>
+
+// Qt 6: endl() lives in namespace Qt since 6.0; restore bare use.
+using Qt::endl;
 
 #define GENERATOR_NO_PROTECTED_FUNCTIONS
 
@@ -1137,7 +1141,7 @@ void maybeDeclareMetaType(QTextStream &stream, const QString &typeName,
         return;
     }
 
-    if (registeredTypeNames.contains(nameFootPrint) || (QMetaType::type(name.toLatin1()) != 0))
+    if (registeredTypeNames.contains(nameFootPrint) || (QMetaType::fromName(name.toLatin1()).isValid()))
         return;
     if (name.contains(QLatin1Char(','))) {
         // need to expand the Q_DECLARE_METATYPE macro manually,
@@ -1589,7 +1593,7 @@ void ClassGenerator::write(QTextStream &stream, const AbstractMetaClass *meta_cl
     }
     {
         IncludeList includes = meta_class->typeEntry()->extraIncludes();
-        qSort(includes.begin(), includes.end());
+        std::sort(includes.begin(), includes.end());
 
         foreach (const Include &i, includes) {
             writeInclude(stream, i);

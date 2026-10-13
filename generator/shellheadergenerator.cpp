@@ -46,6 +46,9 @@
 
 #include <qdebug.h>
 
+// Qt 6: endl() lives in namespace Qt since 6.0; restore bare use.
+using Qt::endl;
+
 QString ShellHeaderGenerator::fileNameForClass(const AbstractMetaClass *meta_class) const
 {
     return QString("qtscriptshell_%1.h").arg(meta_class->name());

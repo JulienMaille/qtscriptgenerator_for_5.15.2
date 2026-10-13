@@ -42,6 +42,10 @@
 #include "shellimplgenerator.h"
 #include "reporthandler.h"
 #include "fileout.h"
+#include <algorithm>
+
+// Qt 6: endl() lives in namespace Qt since 6.0; restore bare use.
+using Qt::endl;
 
 extern void declareFunctionMetaTypes(QTextStream &stream,
                                      const AbstractMetaFunctionList &functions,
@@ -82,7 +86,7 @@ void ShellImplGenerator::write(QTextStream &s, const AbstractMetaClass *meta_cla
     s << "#include <QtScript/QScriptEngine>" << endl;
 
     IncludeList list = meta_class->typeEntry()->extraIncludes();
-    qSort(list.begin(), list.end(), include_less_than);
+    std::sort(list.begin(), list.end(), include_less_than);
     foreach (const Include &inc, list) {
         if (inc.type == Include::TargetLangImport)
             continue;

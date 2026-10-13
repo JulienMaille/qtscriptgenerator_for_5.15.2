@@ -125,15 +125,35 @@ private:
 
 #   if QT_VERSION >= 0x050000
     operator T * () const {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        return QAtomicPointer<T>::loadRelaxed();
+#else
         return QAtomicPointer<T>::load();
+#endif
     }
     inline bool operator!() const { return !(bool)*this; }
     operator bool () const {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        return (bool)QAtomicPointer<T>::loadRelaxed();
+#else
         return (bool)QAtomicPointer<T>::load();
+#endif
     }
 
-    inline T *operator->() { return QAtomicPointer<T>::load(); }
-    inline const T *operator->() const { return QAtomicPointer<T>::load(); }
+    inline T *operator->() {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        return QAtomicPointer<T>::loadRelaxed();
+#else
+        return QAtomicPointer<T>::load();
+#endif
+    }
+    inline const T *operator->() const {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        return QAtomicPointer<T>::loadRelaxed();
+#else
+        return QAtomicPointer<T>::load();
+#endif
+    }
     inline bool operator==(const CodeModelPointer<T> &other) const { return (T*)*this == (T*)other; }
     inline bool operator!=(const CodeModelPointer<T> &other) const { return (T*)*this != (T*)other; }
     inline bool operator==(const T *ptr) const { return (T*)*this == ptr; }

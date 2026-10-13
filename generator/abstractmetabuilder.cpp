@@ -54,9 +54,13 @@
 #include <QtCore/QDebug>
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
-#include <QtCore/QTextCodec>
+#include <QtCore/QStringConverter>
 #include <QtCore/QTextStream>
 #include <QtCore/QVariant>
+#include <algorithm>
+
+// Qt 6: endl() lives in namespace Qt since 6.0; restore bare use.
+using Qt::endl;
 
 static QString strip_template_args(const QString &name)
 {
@@ -339,7 +343,7 @@ static bool class_less_than(AbstractMetaClass *a, AbstractMetaClass *b)
 
 void AbstractMetaBuilder::sortLists()
 {
-   qSort(m_meta_classes.begin(), m_meta_classes.end(), class_less_than);
+   std::sort(m_meta_classes.begin(), m_meta_classes.end(), class_less_than);
    foreach (AbstractMetaClass *cls, m_meta_classes) {
         cls->sortFunctions();
    }
@@ -355,7 +359,7 @@ bool AbstractMetaBuilder::build()
         return false;
 
     QTextStream stream(&file);
-    stream.setCodec(QTextCodec::codecForName("UTF-8"));
+    // Qt 6: QTextStream defaults to UTF-8; setCodec() was removed.
     QByteArray contents = stream.readAll().toUtf8();
     file.close();
 
@@ -1004,7 +1008,7 @@ AbstractMetaEnum *AbstractMetaBuilder::traverseEnum(EnumModelItem enum_item, Abs
         meta_enum->addEnumValue(meta_enum_value);
 
         ReportHandler::debugFull("   - " + meta_enum_value->name() + " = "
-                                 + meta_enum_value->value());
+                                 + QString::number(meta_enum_value->value()));
 
         // Add into global register...
         if (enclosing)
@@ -1491,7 +1495,7 @@ void AbstractMetaBuilder::traverseEnums(ScopeModelItem scope_item, AbstractMetaC
 {
     EnumList enums = scope_item->enums();
     foreach (EnumModelItem enum_item, enums) {
-        AbstractMetaEnum *meta_enum = traverseEnum(enum_item, meta_class, QSet<QString>::fromList(enumsDeclarations));
+        AbstractMetaEnum *meta_enum = traverseEnum(enum_item, meta_class, QSet<QString>(enumsDeclarations.begin(), enumsDeclarations.end()));
         if (meta_enum) {
             meta_enum->setOriginalAttributes(meta_enum->attributes());
             meta_class->addEnum(meta_enum);
@@ -2555,7 +2559,7 @@ AbstractMetaClassList AbstractMetaBuilder::classesTopologicalSorted() const
     AbstractMetaClassList res;
 
     AbstractMetaClassList classes = m_meta_classes;
-    qSort(classes);
+    std::sort(classes.begin(), classes.end());
 
     QSet<AbstractMetaClass*> noDependency;
     QHash<AbstractMetaClass*, QSet<AbstractMetaClass* >* > hash;

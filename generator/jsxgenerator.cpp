@@ -42,6 +42,10 @@
 #include "jsxgenerator.h"
 #include "fileout.h"
 #include <iostream>
+#include <algorithm>
+
+// Qt 6: endl() lives in namespace Qt since 6.0; restore bare use.
+using Qt::endl;
 
 QList<int> uniqueEnumValueIndexes(const AbstractMetaEnumValueList &values);
 
@@ -173,7 +177,7 @@ void JSXGenerator::generate()
         for (it = packHash.constBegin(); it != packHash.constEnd(); ++it) {
             QString package = it.key();
             QList<const AbstractMetaClass*> classesInPackage = it.value();
-            qSort(classesInPackage.begin(), classesInPackage.end(), classLessThan);
+            std::sort(classesInPackage.begin(), classesInPackage.end(), classLessThan);
 
             QString packageName = QStringList(package.split(".").mid(2)).join("_");
             FileOut file(m_out_dir + "/jsx/" + packageName + ".jsx");
@@ -1048,8 +1052,8 @@ void JSXGenerator::write(QTextStream &o, const AbstractMetaClass *meta_class)
         includes.remove("qvector");
         includes.remove("date");
         includes.remove("regexp");
-        QStringList includeFiles = includes.toList();
-        qSort(includeFiles.begin(), includeFiles.end());
+        QStringList includeFiles(includes.begin(), includes.end());
+        std::sort(includeFiles.begin(), includeFiles.end());
 
         foreach (const QString &i, includeFiles) {
             writeInclude(o, i);

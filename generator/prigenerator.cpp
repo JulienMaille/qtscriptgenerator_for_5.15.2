@@ -42,6 +42,7 @@
 #include "prigenerator.h"
 #include "reporthandler.h"
 #include "fileout.h"
+#include <algorithm>
 
 void PriGenerator::addHeader(const QString &folder, const QString &header)
 {
@@ -65,7 +66,7 @@ void PriGenerator::generate()
         QString folder = pri.key();
         FileOut file(m_out_dir + "/generated_cpp/" + folder + "/" + folder + ".pri");
         file.stream << "HEADERS += \\\n";
-        qSort(list.begin(), list.end());
+        std::sort(list.begin(), list.end());
         foreach (const QString &entry, list) {
             file.stream << "           $$PWD/" << entry << " \\\n";
         }
@@ -73,7 +74,7 @@ void PriGenerator::generate()
         file.stream << "\n";
         file.stream << "SOURCES += \\\n";
         list = pri.value().sources;
-        qSort(list.begin(), list.end());
+        std::sort(list.begin(), list.end());
         foreach (const QString &entry, list) {
             file.stream << "           $$PWD/" << entry << " \\\n";
         }

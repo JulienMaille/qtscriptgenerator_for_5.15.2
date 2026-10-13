@@ -218,7 +218,7 @@ QString TypeInfo::toString() const
   return tmp;
 }
 
-bool TypeInfo::operator==(const TypeInfo &other)
+bool TypeInfo::operator==(const TypeInfo &other) const
 {
   if (arrayElements().count() != other.arrayElements().count())
     return false;

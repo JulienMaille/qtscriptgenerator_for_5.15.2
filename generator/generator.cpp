@@ -46,6 +46,10 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <algorithm>
+
+// Qt 6: endl() lives in namespace Qt since 6.0; restore bare use.
+using Qt::endl;
 
 Generator::Generator()
 {
@@ -85,7 +89,7 @@ void Generator::printClasses()
     QTextStream s(stdout);
 
     AbstractMetaClassList classes = m_classes;
-    qSort(classes);
+    std::sort(classes.begin(), classes.end());
 
     foreach (AbstractMetaClass *cls, classes) {
         if (!shouldGenerate(cls))

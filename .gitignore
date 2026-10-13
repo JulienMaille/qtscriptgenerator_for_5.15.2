@@ -19,6 +19,10 @@ qtbindings/*/moc_*.cpp
 /generator/Makefile
 /generator/Makefile.Debug
 /generator/Makefile.Release
+/generator/Makefile.qt6
+/generator/Makefile.qt6.Debug
+/generator/Makefile.qt6.Release
+/generator/merged/
 /generator/release/
 .qmake.stash
 

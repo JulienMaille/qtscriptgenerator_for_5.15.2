@@ -47,7 +47,6 @@
 
 #include <QXmlStreamWriter>
 #include <QTextStream>
-#include <QTextCodec>
 #include <QFile>
 
 void astToXML(QString name) {
@@ -57,7 +56,7 @@ void astToXML(QString name) {
         return;
 
     QTextStream stream(&file);
-    stream.setCodec(QTextCodec::codecForName("UTF-8"));
+    // Qt 6: QTextStream defaults to UTF-8; setCodec() was removed.
     QByteArray contents = stream.readAll().toUtf8();
     file.close();
 
@@ -82,12 +81,12 @@ void astToXML(QString name) {
 
     s.writeStartElement("code");
 
-    QHash<QString, NamespaceModelItem> namespaceMap = dom->namespaceMap();
+    auto namespaceMap = dom->namespaceMap();
     foreach (NamespaceModelItem item, namespaceMap.values()) {
         writeOutNamespace(s, item);
     }
 
-    QHash<QString, ClassModelItem> typeMap = dom->classMap();
+    auto typeMap = dom->classMap();
     foreach (ClassModelItem item, typeMap.values()) {
         writeOutClass(s, item);
     }
@@ -164,7 +163,7 @@ void writeOutClass(QXmlStreamWriter &s, ClassModelItem &item) {
         writeOutEnum(s, enumItem);
     }
 
-    QHash<QString, FunctionModelItem> functionMap = item->functionMap();
+    auto functionMap = item->functionMap();
     foreach (FunctionModelItem funcItem, functionMap.values()) {
         writeOutFunction(s, funcItem);
     }
