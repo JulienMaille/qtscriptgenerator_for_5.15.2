@@ -22,6 +22,12 @@
 #define Q_OS_OS2
 #define Q_NO_USING_KEYWORD
 
+// Qt 6: version-gated macros (QT6_ONLY/QT7_ONLY in qtversionchecks.h) need
+// QT_VERSION_MAJOR; the legacy rpp run leaves it undefined (headers that
+// would define it are skipped or evaluated too late), so QT6_ONLY(...) leaks
+// literally into class heads (e.g. QIPv6Address) and drops the class.
+#define QT_VERSION_MAJOR 6
+
 // There are symbols in Qt that exist in Debug but
 // not in release
 #define QT_NO_DEBUG

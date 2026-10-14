@@ -192,6 +192,14 @@ int main(int argc, char *argv[])
     // emitted correctly, then the original invocation leaks literally). A bare
     // IDENT(arg) statement desyncs the legacy parser and silently drops every
     // class parsed afterwards (QFileDevice, QFile, QCryptographicHash, ...).
+    //
+    // Qt 6 addition: rpp has no variadic-macro support, so QT6_ONLY(...),
+    // QT7_ONLY(...) and anything built on them (QT6_CALL_NEW_OVERLOAD etc.)
+    // survive preprocessing literally and break parsing of the surrounding
+    // declarations (e.g. class QT6_ONLY() QIPv6Address). Expand them textually
+    // here: QT6_ONLY keeps its arguments (we target Qt 6), QT7_ONLY drops them.
+    // Parenthesis-aware so nested calls (QT6_ONLY(, QT6_DECL_NEW_OVERLOAD),
+    // QT6_ONLY(QT_WARNING_DISABLE_MSVC(4275))) resolve correctly.
     {
         QFile pp(pp_file);
         if (pp.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -205,6 +213,45 @@ int main(int argc, char *argv[])
                 "^[ \\t]*\\bMAKE_ADL_TEST\\s*\\([^()\\n]*\\)[ \\t]*\\r?$",
                 QRegularExpression::MultilineOption);
             cleaned.remove(adlLeak);
+            auto expandVersionMacro = [](QString &text, const char *macro, bool keepArgs) {
+                const QString name = QString::fromLatin1(macro);
+                const QString open = name + QLatin1String("(");
+                int pos = 0;
+                while ((pos = text.indexOf(open, pos)) != -1) {
+                    // Only match a whole identifier, not FooQT6_ONLY(.
+                    if (pos > 0 && (text.at(pos - 1).isLetterOrNumber() || text.at(pos - 1) == QLatin1Char('_'))) {
+                        pos += name.length();
+                        continue;
+                    }
+                    int depth = 0;
+                    int i = pos + name.length();
+                    for (; i < text.length(); ++i) {
+                        QChar c = text.at(i);
+                        if (c == QLatin1Char('('))
+                            ++depth;
+                        else if (c == QLatin1Char(')')) {
+                            --depth;
+                            if (depth == 0)
+                                break;
+                        }
+                    }
+                    if (depth != 0) {
+                        pos += name.length();
+                        continue; // unbalanced; leave alone
+                    }
+                    int argsStart = pos + name.length() + 1;
+                    QString args = text.mid(argsStart, i - argsStart);
+                    text.replace(pos, i - pos + 1, keepArgs ? args : QString());
+                    // Rescan from the same position: the inserted arguments may
+                    // themselves contain a nested invocation (e.g. QT6_ONLY(,
+                    // QT6_DECL_NEW_OVERLOAD)). Each pass strips one nesting
+                    // level, so this terminates; skipping ahead would leave
+                    // nested leftovers behind.
+                }
+            };
+            expandVersionMacro(cleaned, "QT6_ONLY", true);
+            expandVersionMacro(cleaned, "QT7_ONLY", false);
+
             if (cleaned != code) {
                 QFile::remove(pp_file);
                 QFile out(pp_file);
