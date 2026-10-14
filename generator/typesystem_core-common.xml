@@ -1462,6 +1462,9 @@
       <!-- Qt 6: inherited QList::swap models with bare QList arg (template
            args lost); the emitted qscriptvalue_cast<QList> cannot compile -->
       <modify-function signature="swap(QList&amp;)" remove="all"/>
+      <!-- Qt 6: inherited QList::value(qsizetype) is hidden by the QStringView
+           value() overloads; the unqualified call cannot compile -->
+      <modify-function signature="value(qsizetype)const" remove="all"/>
     </value-type>
     <value-type name="QXmlStreamNamespaceDeclaration"/>
     <value-type name="QXmlStreamNotationDeclaration"/>

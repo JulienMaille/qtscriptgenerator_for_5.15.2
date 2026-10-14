@@ -1576,6 +1576,8 @@
     <primitive-type name="jobject"/>
     <primitive-type name="quintptr"/>
     <primitive-type name="qintptr"/>
+    <!-- Qt 6: qsizetype (ptrdiff_t) is pervasive in Qt6 signatures -->
+    <primitive-type name="qsizetype"/>
 
   <suppress-warning text="WARNING(MetaJavaBuilder) :: signal 'finished' in class 'QProcess' is overloaded." />
   <suppress-warning text="WARNING(MetaJavaBuilder) :: missing required class for enums: QRegExp" />
