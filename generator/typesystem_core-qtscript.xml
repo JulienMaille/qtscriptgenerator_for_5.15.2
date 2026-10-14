@@ -378,7 +378,17 @@
         <replace-type modified-type="QString"/>
         <conversion-rule class="native">
           <insert-template name="core.convert_string_arg_to_char*"/>
-        </conversion-rule>            
+        </conversion-rule>
+      </modify-argument>
+    </modify-function>
+
+    <!-- Qt 6: (const char*, qsizetype = -1); same string conversion on arg 1 -->
+    <modify-function signature="QByteArray(const char*,qsizetype)">
+      <modify-argument index="1">
+        <replace-type modified-type="QString"/>
+        <conversion-rule class="native">
+          <insert-template name="core.convert_string_arg_to_char*"/>
+        </conversion-rule>
       </modify-argument>
     </modify-function>
 

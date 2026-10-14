@@ -229,13 +229,18 @@ void AbstractMetaBuilder::registerHashFunction(FunctionModelItem function_item)
 void AbstractMetaBuilder::registerToStringCapability(FunctionModelItem function_item)
 {
     ArgumentList arguments = function_item->arguments();
-    if (arguments.size() == 2) {
-        if (arguments.at(0)->type().toString() == "QDebug"){
-            ArgumentModelItem arg = arguments.at(1);
-            if (AbstractMetaClass *cls = argumentToClass(arg)) {
-                if (arg->type().indirections() < 2) {
-                    cls->setToStringCapability(function_item);
-                }
+    // Free-function shape: operator<<(QDebug, const X&). Qt 6 member shape:
+    // QDebug::operator<<(const X&) — single argument, owner is QDebug.
+    const int valueIndex = (arguments.size() == 1) ? 0 : 1;
+    if (arguments.size() != 1 && arguments.size() != 2)
+        return;
+    if (arguments.size() == 2 && arguments.at(0)->type().toString() != "QDebug")
+        return;
+    {
+        ArgumentModelItem arg = arguments.at(valueIndex);
+        if (AbstractMetaClass *cls = argumentToClass(arg)) {
+            if (arg->type().indirections() < 2) {
+                cls->setToStringCapability(function_item);
             }
         }
     }
@@ -514,6 +519,20 @@ bool AbstractMetaBuilder::build()
         FunctionList hash_functions = m_dom->findFunctions("operator<<");
         foreach (FunctionModelItem item, hash_functions) {
             registerToStringCapability(item);
+        }
+        // Qt 6: stream operators are member functions of QDebug (e.g.
+        // QDebug::operator<<(const QByteArray &)), not free functions, so the
+        // file-scope search above misses them. Scan QDebug's members for the
+        // single-argument member form and register the same capability.
+        ClassModelItem qdebugClass = m_dom->findClass(QLatin1String("QDebug"));
+        if (qdebugClass) {
+            foreach (FunctionModelItem item, qdebugClass->functions()) {
+                if (item->name() != QLatin1String("operator<<"))
+                    continue;
+                if (item->arguments().size() != 1)
+                    continue;
+                registerToStringCapability(item);
+            }
         }
     }
 
@@ -975,6 +994,19 @@ AbstractMetaEnum *AbstractMetaBuilder::traverseEnum(EnumModelItem enum_item, Abs
     }
 
     if (!type_entry || !type_entry->isEnum()) {
+        // Qt 6: enum moved to a base class scope (e.g. QIODevice::OpenModeFlag
+        // now declared in QIODeviceBase) while the typesystem keeps the
+        // derived qualifier. Retry under the current class before giving up.
+        if (m_current_class && m_current_class->typeEntry()) {
+            QString derived = m_current_class->typeEntry()->qualifiedCppName()
+                              + QLatin1String("::") + enum_name;
+            TypeEntry *alt = TypeDatabase::instance()->findType(derived);
+            if (alt && alt->isEnum())
+                type_entry = alt;
+        }
+    }
+
+    if (!type_entry || !type_entry->isEnum()) {
         QString context = m_current_class ? m_current_class->name() : QLatin1String("");
         ReportHandler::warning(QString("enum '%1' does not have a type entry or is not an enum")
                                .arg(qualified_name));
@@ -1109,6 +1141,12 @@ AbstractMetaClass *AbstractMetaBuilder::traverseClass(ClassModelItem class_item)
     meta_class->setTypeEntry(type);
     meta_class->setBaseClassNames(class_item->baseClasses());
     *meta_class += AbstractMetaAttributes::Public;
+
+    // Qt 6: enums moved to base scopes (e.g. QIODevice::OpenModeFlag in
+    // QIODeviceBase) must have their flags aliases registered BEFORE
+    // traverseFunctions below, so QFlags-typed arguments written against the
+    // base scope resolve during argument translation.
+    registerBaseScopeFlagsAliases(class_item, full_class_name);
 
     AbstractMetaClass *old_current_class = m_current_class;
     m_current_class = meta_class;
@@ -1491,6 +1529,49 @@ bool AbstractMetaBuilder::setupInheritance(AbstractMetaClass *meta_class)
     return true;
 }
 
+void AbstractMetaBuilder::registerBaseScopeFlagsAliases(ClassModelItem class_item,
+                                                           const QString &full_class_name)
+{
+    // Qt 6: enums moved to base scopes keep derived-qualified typesystem
+    // entries. Register the flags type under the base scope qualifier as well
+    // (e.g. QIODeviceBase::OpenMode alongside QIODevice::OpenMode) so
+    // arguments written against either scope resolve to the same entry.
+    QSet<QString> seen;
+    QStringList stack = class_item->baseClasses();
+    QSet<QString> visited;
+    while (!stack.isEmpty()) {
+        QString baseName = stack.takeFirst();
+        if (visited.contains(baseName))
+            continue;
+        visited.insert(baseName);
+        ClassModelItem baseItem = m_dom->findClass(baseName);
+        if (!baseItem)
+            continue;
+        foreach (QString b, baseItem->baseClasses())
+            stack.append(b);
+        foreach (EnumModelItem enum_item, baseItem->enums()) {
+            if (seen.contains(enum_item->name()))
+                continue;
+            seen.insert(enum_item->name());
+            QString entryName = full_class_name + QLatin1String("::") + enum_item->name();
+            TypeEntry *te = TypeDatabase::instance()->findType(entryName);
+            if (!te || !te->isEnum())
+                continue;
+            FlagsTypeEntry *fte = static_cast<EnumTypeEntry *>(te)->flags();
+            if (!fte)
+                continue;
+            QStringList qn = enum_item->qualifiedName();
+            QString baseScope = QStringList(qn.mid(0, qn.size() - 1)).join("::");
+            QString baseFlagsName = baseScope + QLatin1String("::") + fte->flagsName();
+            if (TypeDatabase::instance()->findFlagsType(baseFlagsName) == 0) {
+                FlagsTypeEntry *alias = new FlagsTypeEntry(*fte);
+                alias->setOriginalName(baseFlagsName);
+                TypeDatabase::instance()->addFlagsType(alias);
+            }
+        }
+    }
+}
+
 void AbstractMetaBuilder::traverseEnums(ScopeModelItem scope_item, AbstractMetaClass *meta_class, const QStringList &enumsDeclarations)
 {
     EnumList enums = scope_item->enums();
@@ -1500,6 +1581,47 @@ void AbstractMetaBuilder::traverseEnums(ScopeModelItem scope_item, AbstractMetaC
             meta_enum->setOriginalAttributes(meta_enum->attributes());
             meta_class->addEnum(meta_enum);
             meta_enum->setEnclosingClass(meta_class);
+        }
+    }
+
+    // Qt 6: several enums moved to new base classes (e.g. QIODevice::OpenModeFlag
+    // now lives in QIODeviceBase) while the typesystem keeps the derived qualified
+    // name (which C++ still resolves through inheritance). Look up base scopes
+    // for enums that have an entry qualified under this class but no declaration
+    // in this scope, so the script class keeps its historical placement.
+    if (meta_class && meta_class->typeEntry() && meta_class->typeEntry()->isComplex()) {
+        QString className = meta_class->typeEntry()->qualifiedCppName();
+        QSet<QString> seen;
+        foreach (AbstractMetaEnum *e, meta_class->enums())
+            seen.insert(e->name());
+        QStringList stack = meta_class->baseClassNames();
+        QSet<QString> visited;
+        while (!stack.isEmpty()) {
+            QString baseName = stack.takeFirst();
+            if (visited.contains(baseName))
+                continue;
+            visited.insert(baseName);
+            ClassModelItem baseItem = m_dom->findClass(baseName);
+            if (!baseItem)
+                continue;
+            foreach (QString b, baseItem->baseClasses())
+                stack.append(b);
+            foreach (EnumModelItem enum_item, baseItem->enums()) {
+                QString entryName = className + QLatin1String("::") + enum_item->name();
+                TypeEntry *te = TypeDatabase::instance()->findType(entryName);
+                if (!te || !te->isEnum())
+                    continue;
+                if (seen.contains(enum_item->name()))
+                    continue;
+                seen.insert(enum_item->name());
+                AbstractMetaEnum *meta_enum = traverseEnum(enum_item, meta_class,
+                    QSet<QString>(enumsDeclarations.begin(), enumsDeclarations.end()));
+                if (meta_enum) {
+                    meta_enum->setOriginalAttributes(meta_enum->attributes());
+                    meta_class->addEnum(meta_enum);
+                    meta_enum->setEnclosingClass(meta_class);
+                }
+            }
         }
     }
 }

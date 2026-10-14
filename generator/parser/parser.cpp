@@ -1446,6 +1446,30 @@ bool Parser::parseEnumSpecifier(TypeSpecifierAST *&node)
   NameAST *name = 0;
   parseName(name);
 
+  // C++11 fixed underlying type: enum X : unsigned int { ... }. The legacy
+  // parser predates this; skip the underlying-type clause (Qt 6 uses it in
+  // several enums, e.g. QUrl::ComponentFormattingOption : unsigned int).
+  if (token_stream.lookAhead() == ':')
+    {
+      token_stream.nextToken(); // ':'
+      int depth = 0;
+      while (true)
+        {
+          int tk = token_stream.lookAhead();
+          if (tk == 0)
+            break;
+          if (tk == '{' && depth == 0)
+            break;
+          if (tk == '<')
+            ++depth;
+          else if (tk == '>')
+            --depth;
+          else if ((tk == ';' || tk == '}') && depth == 0)
+            break;
+          token_stream.nextToken();
+        }
+    }
+
   if (token_stream.lookAhead() != '{')
     {
       token_stream.rewind((int) start);

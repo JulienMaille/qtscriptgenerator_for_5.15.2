@@ -1404,7 +1404,9 @@ static void writePrototypeCall(QTextStream &s, const AbstractMetaClass *meta_cla
         s << "    QString result";
         FunctionModelItem fun = meta_class->hasToStringCapability();
         if (fun) {
-            int indirections = fun->arguments().at(1)->type().indirections();
+            // Free-function shape has (QDebug, X); Qt 6 member shape has (X).
+            const int valueIndex = (fun->arguments().size() == 1) ? 0 : 1;
+            int indirections = fun->arguments().at(valueIndex)->type().indirections();
             QString deref = QLatin1String(indirections == 0 ? "*" : "");
             s << ";" << endl
               << "    QDebug d(&result);" << endl

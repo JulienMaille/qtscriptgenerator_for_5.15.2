@@ -534,6 +534,8 @@
   <enum-type name="QTimeLine::Direction"/>
   <enum-type name="QTimeLine::State"/>
   <enum-type name="QUrl::ParsingMode"/>
+  <!-- Qt 6: fixed underlying type (enum ... : unsigned int) -->
+  <enum-type name="QUrl::ComponentFormattingOption" flags="QUrl::ComponentFormattingOptions"/>
   <enum-type name="QUuid::Variant"/>
   <enum-type name="QUuid::Version"/>
   <enum-type name="Qt::SizeHint" />
@@ -830,6 +832,22 @@
     <modify-function signature="operator=(QLocale)" remove="all"/>
   </value-type>
 
+  <!-- Qt 6: encoding enum holder; QTextStream.encoding()/setEncoding() and
+       script-side QStringConverter.Utf8 need the enum bound -->
+  <object-type name="QStringConverter">
+    <!-- Utility base: protected ctor/dtor, deleted copy; the shell cannot
+         compile (protected base dtor) and script needs no instances (the
+         oracle exposes a namespace-style object). Remove instance surface so
+         no shell generates; statics + Encoding enum still bind. -->
+    <modify-function signature="~QStringConverter()" remove="all"/>
+    <modify-function signature="QStringConverter()" remove="all"/>
+    <modify-function signature="QStringConverter(const QStringConverter&amp;)" remove="all"/>
+    <modify-function signature="QStringConverter(QStringConverter&amp;&amp;)" remove="all"/>
+    <modify-function signature="operator=(const QStringConverter&amp;)" remove="all"/>
+    <modify-function signature="operator=(QStringConverter&amp;&amp;)" remove="all"/>
+  </object-type>
+  <enum-type name="QStringConverter::Encoding"/>
+
 
   <value-type name="QBitArray">
     <modify-function signature="operator[](int)" remove="all"/>
@@ -950,6 +968,24 @@
     <modify-function signature="operator+=(QByteArray)" remove="all"/>
     <modify-function signature="operator+=(QString)" remove="all"/>
     <modify-function signature="operator+=(char)" remove="all"/>
+
+    <!-- Qt 6: QByteArray has no toString() of its own. The generator emits a
+         synthetic fallback (class-name literal, or QDebug-quoted output via
+         the member operator<< capability). Override on the prototype with the
+         QString conversion so bytes.toString() === content. -->
+    <inject-code class="native" position="prototype-initialization">
+    {
+        QScriptValue toStringFun = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QByteArray *self = qscriptvalue_cast&lt;QByteArray*&gt;(ctx-&gt;thisObject());
+                if (!self)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QByteArray.toString(): this object is not a QByteArray"));
+                return QScriptValue(eng, QString(*self));
+            }, 0);
+        proto.setProperty(QString::fromLatin1("toString"), toStringFun, QScriptValue::SkipInEnumeration);
+    }
+    </inject-code>
   </value-type>
 
   <value-type name="QTextBoundaryFinder">
@@ -1469,7 +1505,19 @@
     <value-type name="QXmlStreamNamespaceDeclaration"/>
     <value-type name="QXmlStreamNotationDeclaration"/>
     <value-type name="QXmlStreamEntityDeclaration"/>
-    <object-type name="QXmlStreamReader"/>
+    <!-- Qt 6: string-view types resolve for signatures/conversions but generate
+         no bindings of their own -->
+    <value-type name="QStringView" generate="no"/>
+    <value-type name="QAnyStringView" generate="no"/>
+    <object-type name="QXmlStreamReader">
+      <!-- Qt 6: string ctor takes QAnyStringView (implicit from QString);
+           convert script strings so new QXmlStreamReader("<root/>") works -->
+      <modify-function signature="QXmlStreamReader(QAnyStringView)">
+        <modify-argument index="1">
+          <replace-type modified-type="QString"/>
+        </modify-argument>
+      </modify-function>
+    </object-type>
     <object-type name="QXmlStreamWriter"/>
     <enum-type name="QXmlStreamReader::ReadElementTextBehaviour" />
 

@@ -94,6 +94,7 @@ public:
     AbstractMetaClass *traverseNamespace(NamespaceModelItem item);
     AbstractMetaEnum *traverseEnum(EnumModelItem item, AbstractMetaClass *enclosing, const QSet<QString> &enumsDeclarations);
     void traverseEnums(ScopeModelItem item, AbstractMetaClass *parent, const QStringList &enumsDeclarations);
+    void registerBaseScopeFlagsAliases(ClassModelItem item, const QString &full_class_name);
     void traverseFunctions(ScopeModelItem item, AbstractMetaClass *parent);
     void traverseFields(ScopeModelItem item, AbstractMetaClass *parent);
     void traverseStreamOperator(FunctionModelItem function_item);
