@@ -158,6 +158,11 @@ private:
     QMap<QString, RejectReason> m_rejected_classes;
     QMap<QString, RejectReason> m_rejected_enums;
     QMap<QString, RejectReason> m_rejected_functions;
+    // Qt 6: using-alias -> existing meta class (e.g. QHostAddress::
+    // NetworkLayerProtocol resolves to QAbstractSocket's meta class).
+    QMap<QString, AbstractMetaClass *> m_aliased_meta_classes;
+    // Alias qualifiers whose target class has not traversed yet.
+    QMap<QString, QString> m_pending_alias_targets;
     QMap<QString, RejectReason> m_rejected_fields;
 
     QList<AbstractMetaEnum *> m_enums;

@@ -26,7 +26,13 @@
 // QT_VERSION_MAJOR; the legacy rpp run leaves it undefined (headers that
 // would define it are skipped or evaluated too late), so QT6_ONLY(...) leaks
 // literally into class heads (e.g. QIPv6Address) and drops the class.
+// NOTE: rpp evaluates `#if QT_VERSION_MAJOR == 6` with undefined identifiers
+// as 0, which also breaks `#if QT_VERSION < QT_VERSION_CHECK(7,0,0)` guards
+// (they take the Qt7 branch). Define the full version triple for the target.
 #define QT_VERSION_MAJOR 6
+#define QT_VERSION_MINOR 8
+#define QT_VERSION_PATCH 3
+#define QT_VERSION_STR "6.8.3"
 
 // There are symbols in Qt that exist in Debug but
 // not in release

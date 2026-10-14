@@ -582,6 +582,18 @@ void AbstractMetaBuilder::addAbstractMetaClass(AbstractMetaClass *cls)
         m_templates << cls;
     } else {
         m_meta_classes << cls;
+        // Qt 6: resolve any pending using-alias registrations whose target
+        // is the class that was just added (aliases are recorded during
+        // traversal, but targets may traverse later).
+        QString justAdded = cls->qualifiedCppName();
+        QMutableMapIterator<QString, QString> pit(m_pending_alias_targets);
+        while (pit.hasNext()) {
+            pit.next();
+            if (pit.value() == justAdded) {
+                m_aliased_meta_classes.insert(pit.key(), cls);
+                pit.remove();
+            }
+        }
         if (cls->typeEntry()->designatedInterface()) {
             AbstractMetaClass *interface = cls->extractInterface();
             m_meta_classes << interface;
@@ -1170,6 +1182,32 @@ AbstractMetaClass *AbstractMetaBuilder::traverseClass(ClassModelItem class_item)
 
     parseQ_Property(meta_class, class_item->propertyDeclarations());
 
+    // Qt 6: C++11 type aliases (e.g. using NetworkLayerProtocol =
+    // QAbstractSocket::NetworkLayerProtocol). The alias target's type entry
+    // decides the path: if the alias qualifier itself has a typesystem entry
+    // (enum-type for a same-named enum alias), record the alias so signatures
+    // written against it resolve to the existing target meta class. Otherwise
+    // the alias may name a real class (QList<T> specializations etc.) and is
+    // handled with the other typedefs below. Registration happens BEFORE
+    // traverseFunctions so function signatures can use the alias.
+    TypeAliasList earlyAliases = class_item->typeAliases();
+    TypeAliasList lateAliases;
+    foreach (TypeAliasModelItem earlyAlias, earlyAliases) {
+        QString aliasQualified = type->qualifiedCppName()
+                                 + QLatin1String("::") + earlyAlias->name();
+        TypeEntry *aliasEntry = TypeDatabase::instance()->findType(aliasQualified);
+        if (aliasEntry && (aliasEntry->isEnum() || aliasEntry->isFlags())) {
+            QString targetName = earlyAlias->type().qualifiedName().join(QLatin1String("::"));
+            AbstractMetaClass *targetMeta = m_meta_classes.findClass(targetName);
+            if (targetMeta)
+                m_aliased_meta_classes.insert(aliasQualified, targetMeta);
+            else
+                m_pending_alias_targets.insert(aliasQualified, targetName);
+        } else {
+            lateAliases.append(earlyAlias);
+        }
+    }
+
     traverseFunctions(model_dynamic_cast<ScopeModelItem>(class_item), meta_class);
     traverseEnums(model_dynamic_cast<ScopeModelItem>(class_item), meta_class, class_item->enumsDeclarations());
     traverseFields(model_dynamic_cast<ScopeModelItem>(class_item), meta_class);
@@ -1188,8 +1226,9 @@ AbstractMetaClass *AbstractMetaBuilder::traverseClass(ClassModelItem class_item)
     }
 
     // Go through all typedefs to see if we have defined any
-    // specific typedefs to be used as classes.
-    TypeAliasList typeAliases = class_item->typeAliases();
+    // specific typedefs to be used as classes. (Qt 6: enum-target aliases
+    // were already consumed by the early pass above and are excluded here.)
+    TypeAliasList typeAliases = lateAliases;
     foreach (TypeAliasModelItem typeAlias, typeAliases) {
         AbstractMetaClass *cls = traverseTypeAlias(typeAlias);
         if (cls != 0) {
@@ -1589,12 +1628,29 @@ void AbstractMetaBuilder::traverseEnums(ScopeModelItem scope_item, AbstractMetaC
     // name (which C++ still resolves through inheritance). Look up base scopes
     // for enums that have an entry qualified under this class but no declaration
     // in this scope, so the script class keeps its historical placement.
+    //
+    // The walk below only covers the ancestors of the class being traversed.
+    // When a multi-module build loads another module with generate="no" (e.g.
+    // network loading core), the alias entries exist but the holder classes
+    // never traverse, so their aliases never register. Repair that lazily in
+    // translateType (step 6b): if a QFlags lookup fails, retry it under every
+    // known enum entry whose unqualified enum name matches.
+    //
+    // Qt 6 also spells some enums as using-aliases for another scope's enum
+    // (e.g. QHostAddress::NetworkLayerProtocol for
+    // QAbstractSocket::NetworkLayerProtocol). The alias scope is not an
+    // ancestor, so the same entry lookup applies here: when the derived
+    // qualifier has an enum entry, traverse the base enum's declaration under
+    // this class.
     if (meta_class && meta_class->typeEntry() && meta_class->typeEntry()->isComplex()) {
         QString className = meta_class->typeEntry()->qualifiedCppName();
         QSet<QString> seen;
         foreach (AbstractMetaEnum *e, meta_class->enums())
             seen.insert(e->name());
+        // Seed the walk with real bases plus the alias-holder itself, so its
+        // own type aliases resolve to their targets below.
         QStringList stack = meta_class->baseClassNames();
+        stack.append(className);
         QSet<QString> visited;
         while (!stack.isEmpty()) {
             QString baseName = stack.takeFirst();
@@ -1620,6 +1676,40 @@ void AbstractMetaBuilder::traverseEnums(ScopeModelItem scope_item, AbstractMetaC
                     meta_enum->setOriginalAttributes(meta_enum->attributes());
                     meta_class->addEnum(meta_enum);
                     meta_enum->setEnclosingClass(meta_class);
+                }
+            }
+            // Qt 6 using-alias enums: resolve alias targets declared in this
+            // scope (e.g. QHostAddress::NetworkLayerProtocol =
+            // QAbstractSocket::NetworkLayerProtocol) and traverse the target
+            // declaration when the alias qualifier has an enum entry.
+            foreach (TypeAliasModelItem alias_item, baseItem->typeAliases()) {
+                QString entryName = className + QLatin1String("::") + alias_item->name();
+                TypeEntry *te = TypeDatabase::instance()->findType(entryName);
+                if (!te || !te->isEnum())
+                    continue;
+                // The alias target must be a real enum declaration somewhere.
+                QString target = alias_item->type().qualifiedName().join(QLatin1String("::"));
+                int sep = target.lastIndexOf(QLatin1String("::"));
+                if (sep <= 0)
+                    continue;
+                QString targetScope = target.left(sep);
+                QString targetName = target.mid(sep + 2);
+                ClassModelItem targetItem = m_dom->findClass(targetScope);
+                if (!targetItem)
+                    continue;
+                foreach (EnumModelItem enum_item, targetItem->enums()) {
+                    if (enum_item->name() != targetName)
+                        continue;
+                    if (seen.contains(alias_item->name()))
+                        continue;
+                    seen.insert(alias_item->name());
+                    AbstractMetaEnum *meta_enum = traverseEnum(enum_item, meta_class,
+                        QSet<QString>(enumsDeclarations.begin(), enumsDeclarations.end()));
+                    if (meta_enum) {
+                        meta_enum->setOriginalAttributes(meta_enum->attributes());
+                        meta_class->addEnum(meta_enum);
+                        meta_enum->setEnclosingClass(meta_class);
+                    }
                 }
             }
         }
@@ -1722,7 +1812,44 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
             info.setQualifiedName(QStringList(cast_type));
             type = translateType(info, &ok);
         } else {
+            if (qEnvironmentVariableIsSet("GEN_DEBUG_STRIP"))
+                fprintf(stderr, "DBGRET cls=%s fn=%s rettype=%s\n",
+                        qPrintable(class_name),
+                        qPrintable(function_item->name()),
+                        qPrintable(function_item->type().toString()));
             type = translateType(function_type, &ok);
+            // Qt 6: the return/argument spelling may be a same-named
+            // using-alias recorded for this class (e.g. QHostAddress::
+            // NetworkLayerProtocol for QAbstractSocket::
+            // NetworkLayerProtocol). Retry against the alias target entry.
+            if ((!type || !ok) && m_current_class) {
+                QStringList rqn = function_type.qualifiedName();
+                QString shortName = rqn.isEmpty() ? QString() : rqn.last();
+                QString aliasKey = m_current_class->qualifiedCppName()
+                                   + QLatin1String("::") + shortName;
+                if (qEnvironmentVariableIsSet("GEN_DEBUG_STRIP"))
+                    fprintf(stderr, "DBGRET retry key=%s have=%d short=%s\n",
+                            qPrintable(aliasKey),
+                            (int)m_aliased_meta_classes.contains(aliasKey),
+                            qPrintable(shortName));
+                if (!shortName.isEmpty()
+                    && m_aliased_meta_classes.contains(aliasKey)) {
+                    const TypeEntry *targetEntry =
+                        m_aliased_meta_classes.value(aliasKey)->typeEntry();
+                    // Rebuild the query with the target's qualification.
+                    TypeInfo targetInfo = function_type;
+                    QStringList tqn = targetEntry->qualifiedCppName().split(
+                        QLatin1String("::"));
+                    if (!tqn.isEmpty()) {
+                        targetInfo.setQualifiedName(tqn);
+                        type = translateType(targetInfo, &ok);
+                        if (qEnvironmentVariableIsSet("GEN_DEBUG_STRIP"))
+                            fprintf(stderr, "DBGRET target=%s ok=%d\n",
+                                    qPrintable(targetEntry->qualifiedCppName()),
+                                    (int)ok);
+                    }
+                }
+            }
         }
 
         if (!ok) {
@@ -1918,9 +2045,81 @@ AbstractMetaType *AbstractMetaBuilder::translateType(const TypeInfo &_typei, boo
     // 5. Try to find the type
     const TypeEntry *type = TypeDatabase::instance()->findType(qualified_name);
 
+    // 5b. Qt 6: C++11 using-alias to an already-traversed class (e.g.
+    // QHostAddress::NetworkLayerProtocol -> QAbstractSocket). Aliases are
+    // recorded during class traversal; reuse the target's type entry.
+    if (!type && m_current_class) {
+        QStringList contexts;
+        contexts.append(m_current_class->qualifiedCppName());
+        foreach (const QString &ctx, contexts) {
+            QString aliasKey = ctx + QLatin1String("::") + qualified_name;
+            if (m_aliased_meta_classes.contains(aliasKey)) {
+                type = m_aliased_meta_classes.value(aliasKey)->typeEntry();
+                break;
+            }
+            // Also try the progressively-stripped name: the alias may have
+            // been recorded under a longer qualifier chain.
+            int sep = qualified_name.lastIndexOf(QLatin1String("::"));
+            QString shortName = (sep >= 0) ? qualified_name.mid(sep + 2) : qualified_name;
+            if (shortName != qualified_name) {
+                aliasKey = ctx + QLatin1String("::") + shortName;
+                if (m_aliased_meta_classes.contains(aliasKey)) {
+                    type = m_aliased_meta_classes.value(aliasKey)->typeEntry();
+                    break;
+                }
+            }
+        }
+    }
+
     // 6. No? Try looking it up as a flags type
     if (!type)
         type = TypeDatabase::instance()->findFlagsType(qualified_name);
+
+    // 6b. Qt 6: moved-enum flags aliases. When a build loads the holder's
+    // module with generate="no", the per-class alias pass never runs for the
+    // holder, so a base-scope spelling (e.g. QIODeviceBase::OpenMode from a
+    // network class) finds nothing above. Retry under every known enum entry
+    // whose unqualified enum name matches, and register the alias so later
+    // lookups hit step 6 directly.
+    //
+    // The requested qualifier may name the flags typedef directly
+    // (QIODeviceBase::OpenMode), the enum itself (QIODeviceBase::
+    // OpenModeFlag, used when a signature was written against the enum but
+    // the entry models the flags twin), or a QFlags<...> instantiation.
+    if (!type) {
+        int sep = qualified_name.lastIndexOf(QLatin1String("::"));
+        QString shortEnum = (sep >= 0) ? qualified_name.mid(sep + 2) : qualified_name;
+        // Strip a trailing Flag(s)/Mode(s)-style twin suffix? No: match the
+        // qualifier's last component against the enum name, the flags name,
+        // or the flags typedef's last component.
+        SingleTypeEntryHash allEntries = TypeDatabase::instance()->entries();
+        foreach (TypeEntry *candidate, allEntries.values()) {
+            if (candidate == 0 || !candidate->isEnum())
+                continue;
+            QString candName = candidate->qualifiedCppName();
+            int csep = candName.lastIndexOf(QLatin1String("::"));
+            QString candShort = (csep >= 0) ? candName.mid(csep + 2) : candName;
+            const EnumTypeEntry *enumEntry = static_cast<const EnumTypeEntry *>(candidate);
+            FlagsTypeEntry *fte = enumEntry->flags();
+            QString flagsShort;
+            if (fte) {
+                QString flagsName = fte->originalName();
+                int fsep = flagsName.lastIndexOf(QLatin1String("::"));
+                flagsShort = (fsep >= 0) ? flagsName.mid(fsep + 2) : flagsName;
+            }
+            if (shortEnum != candShort && shortEnum != flagsShort)
+                continue;
+            if (!fte)
+                continue;
+            if (TypeDatabase::instance()->findFlagsType(qualified_name) == 0) {
+                FlagsTypeEntry *alias = new FlagsTypeEntry(*fte);
+                alias->setOriginalName(qualified_name);
+                TypeDatabase::instance()->addFlagsType(alias);
+            }
+            type = TypeDatabase::instance()->findFlagsType(qualified_name);
+            break;
+        }
+    }
 
     // 7. No? Try looking it up as a container type
     if (!type)

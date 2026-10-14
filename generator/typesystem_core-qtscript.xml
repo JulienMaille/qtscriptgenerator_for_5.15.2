@@ -1588,6 +1588,15 @@
     <primitive-type name="qintptr"/>
     <!-- Qt 6: qsizetype (ptrdiff_t) is pervasive in Qt6 signatures -->
     <primitive-type name="qsizetype"/>
+    <!-- Qt 6: fixed-width Qt typedefs appear in signatures (quint16 ports,
+         qint64 sizes); declare them so overload dispatch resolves, with
+         script-number conversions supplied by the emitter. -->
+    <primitive-type name="quint8"/>
+    <primitive-type name="quint16"/>
+    <primitive-type name="quint32"/>
+    <primitive-type name="qint8"/>
+    <primitive-type name="qint16"/>
+    <primitive-type name="qint32"/>
 
   <suppress-warning text="WARNING(MetaJavaBuilder) :: signal 'finished' in class 'QProcess' is overloaded." />
   <suppress-warning text="WARNING(MetaJavaBuilder) :: missing required class for enums: QRegExp" />

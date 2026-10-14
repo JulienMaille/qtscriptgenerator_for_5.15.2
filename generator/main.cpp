@@ -251,6 +251,43 @@ int main(int argc, char *argv[])
             };
             expandVersionMacro(cleaned, "QT6_ONLY", true);
             expandVersionMacro(cleaned, "QT7_ONLY", false);
+            // Qt 6: static_assert is not script API and the legacy parser
+            // cannot skip it (a bare assert desyncs member parsing and drops
+            // the declarations that follow, e.g. QHostAddress::protocol()).
+            // Remove whole statements: static_assert(<balanced parens>);
+            {
+                int pos = 0;
+                const QString kw = QLatin1String("static_assert(");
+                while ((pos = cleaned.indexOf(kw, pos)) != -1) {
+                    if (pos > 0 && (cleaned.at(pos - 1).isLetterOrNumber() || cleaned.at(pos - 1) == QLatin1Char('_'))) {
+                        pos += kw.length();
+                        continue;
+                    }
+                    int depth = 0;
+                    int i = pos + kw.length() - 1;
+                    for (; i < cleaned.length(); ++i) {
+                        QChar c = cleaned.at(i);
+                        if (c == QLatin1Char('('))
+                            ++depth;
+                        else if (c == QLatin1Char(')')) {
+                            --depth;
+                            if (depth == 0)
+                                break;
+                        }
+                    }
+                    if (depth != 0) {
+                        pos += kw.length();
+                        continue;
+                    }
+                    int end = i + 1;
+                    while (end < cleaned.length() && cleaned.at(end).isSpace()
+                           && cleaned.at(end) != QLatin1Char('\n'))
+                        ++end;
+                    if (end < cleaned.length() && cleaned.at(end) == QLatin1Char(';'))
+                        ++end;
+                    cleaned.remove(pos, end - pos);
+                }
+            }
 
             if (cleaned != code) {
                 QFile::remove(pp_file);

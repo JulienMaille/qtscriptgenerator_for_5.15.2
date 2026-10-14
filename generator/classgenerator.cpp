@@ -83,6 +83,19 @@ static QString normalizedType(QString typeName)
 
     if (typeName == QLatin1String("QBool")) // ### hack
         typeName = QLatin1String("bool");
+    // Qt 6: fixed-width Qt typedefs (quint16 ports, qint64 sizes) have
+    // primitive entries but no script testers/converters; normalize them to
+    // their underlying C++ types so dispatch tests (isNumber) and
+    // conversions (toUInt32/toInt32 + static_cast) apply. The narrowing back
+    // to the declared spelling happens in writePrepareArguments.
+    if (typeName == QLatin1String("quint16") || typeName == QLatin1String("ushort")
+        || typeName == QLatin1String("quint8") || typeName == QLatin1String("uchar")
+        || typeName == QLatin1String("quint32"))
+        typeName = QLatin1String("uint");
+    else if (typeName == QLatin1String("qint16") || typeName == QLatin1String("short")
+        || typeName == QLatin1String("qint8")
+        || typeName == QLatin1String("qint32"))
+        typeName = QLatin1String("int");
     return typeName;
 }
 static QString normalizedType(const AbstractMetaType *type)
@@ -326,6 +339,19 @@ static QString builtinConversionFunction(const QString &typeName)
         return QLatin1String("toRegExp");
     else if (typeName == QLatin1String("QObject*"))
         return QLatin1String("toQObject");
+    // Qt 6: fixed-width Qt typedefs have no QScriptValue converter; convert
+    // from a script number explicitly. ushort/quint16 and friends arrive as
+    // double, so narrow from toUInt32/toInt32 instead of qscriptvalue_cast
+    // (whose metatype-id test never matches a plain number).
+    else if (typeName == QLatin1String("ushort")
+             || typeName == QLatin1String("quint16")
+             || typeName == QLatin1String("quint8")
+             || typeName == QLatin1String("uchar"))
+        return QLatin1String("toUInt32");
+    else if (typeName == QLatin1String("short")
+             || typeName == QLatin1String("qint16")
+             || typeName == QLatin1String("qint8"))
+        return QLatin1String("toInt32");
     return QString();
 }
 
@@ -364,6 +390,18 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                 argType = arg->type();
                 typeName = normalizedType(argType);
             }
+            // Qt 6: normalizedType() maps fixed-width typedefs (quint16 ->
+            // uint, qint16 -> int) for dispatch tests, but the C++ local must
+            // keep the declared spelling. Recover it from the meta type.
+            QString declaredName;
+            if (argType) {
+                declaredName = QString::fromLatin1(
+                    QMetaObject::normalizedType(argType->cppSignature().toLatin1()));
+                if (declaredName.endsWith(QLatin1Char('&')))
+                    declaredName.chop(1);
+                if (declaredName.startsWith(QLatin1String("const ")))
+                    declaredName.remove(0, 6);
+            }
             if (typeName == QLatin1String("const char*")) {
                 // A JS string cannot go through qscriptvalue_cast<const char*>
                 // (the cast yields a null pointer at runtime, and the pointed-to
@@ -376,20 +414,36 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                     ++scriptArgIndex;
                 continue;
             }
-            stream << indentStr << typeName << " " << actualOut;
+            stream << indentStr << (declaredName.isEmpty() ? typeName : declaredName) << " " << actualOut;
             QString converter;
+            // Qt 6: narrowing script-number conversions (quint16 local <-
+            // toUInt32 etc.) need a static_cast; the raw conversion yields
+            // uint/int. Declared here so both the open and close paths below
+            // see it. narrowTarget carries the declared spelling.
+            QString narrowTarget;
+            if (!declaredName.isEmpty() && declaredName != typeName
+                && (typeName == QLatin1String("uint") || typeName == QLatin1String("int")))
+                narrowTarget = declaredName;
             // ### generalize the QSet check (we should check if the type has push_back())
             bool useToSequence = argType && isSequenceType(argType) && !argType->name().startsWith("Set");
             if (useToSequence) {
                 stream << ";" << endl;
                 stream << indentStr << "qScriptValueToSequence(";
             } else {
+                // Qt 6: normalizedType() gives the test/converter spelling
+                // (e.g. quint16 -> uint) while declaredName keeps the C++
+                // local spelling. Cast to the declared type: a reference or
+                // pointer target casts to its own spelling (never to a
+                // "const X*" temporary, which cannot bind to X* locals).
+                QString castName = declaredName.isEmpty() ? typeName : declaredName;
                 stream << " = ";
+                if (!narrowTarget.isEmpty())
+                    stream << "static_cast<" << narrowTarget << ">(";
                 converter = builtinConversionFunction(typeName);
                 if (converter.isEmpty()) {
                     // generic conversion
-                    stream << "qscriptvalue_cast<" << typeName;
-                    if (typeName.endsWith(QLatin1Char('>')))
+                    stream << "qscriptvalue_cast<" << castName;
+                    if (castName.endsWith(QLatin1Char('>')))
                         stream << " ";
                     stream << ">(";
                 }
@@ -402,6 +456,8 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                     stream << ")"; // close qscriptvalue_cast
                 } else {
                     stream << "." << converter << "()";
+                    if (!narrowTarget.isEmpty())
+                        stream << ")";
                 }
             }
             stream << ";" << endl;
@@ -509,6 +565,9 @@ static bool hasScriptValueConstructor(const QString &typeName)
             || (typeName == QLatin1String("uint"))
             || (typeName == QLatin1String("double"))
             || (typeName == QLatin1String("QString"));
+    // NOTE (Qt 6): QScriptValue has no (engine, qint64) constructor, so
+    // qint64-returning functions must go through qScriptValueFromValue().
+    // The legacy QScriptValue(engine, int) path would also narrow them.
 }
 
 /*!
@@ -586,13 +645,22 @@ static void writeFunctionCallAndReturn(QTextStream &stream, const AbstractMetaFu
         } else {
             stream << "return ";
             if (retType) {
+                QString normRet = normalizedType(retType);
                 if (isSequenceType(retType))
-                    stream << "qScriptValueFromSequence";
-                else if (hasScriptValueConstructor(normalizedType(retType)))
-                    stream << "QScriptValue";
+                    stream << "qScriptValueFromSequence(context->engine(), _q_result);";
+                else if (hasScriptValueConstructor(normRet))
+                    stream << "QScriptValue(context->engine(), _q_result);";
+                else if (normRet == QLatin1String("qint64")
+                         || normRet == QLatin1String("qlonglong")
+                         || normRet == QLatin1String("quint64")
+                         || normRet == QLatin1String("qulonglong"))
+                    // Qt 6: no QScriptValue(engine, qint64) constructor, and
+                    // the generic qScriptValueFromValue template needs a
+                    // declared metatype; route through QVariant (LongLong /
+                    // ULongLong are built-in) to get an exact 64-bit value.
+                    stream << "qScriptValueFromValue(context->engine(), QVariant::fromValue(_q_result));";
                 else
-                    stream << "qScriptValueFromValue";
-                stream << "(context->engine(), _q_result);";
+                    stream << "qScriptValueFromValue(context->engine(), _q_result);";
             } else {
                 stream << "context->engine()->undefinedValue();";
             }

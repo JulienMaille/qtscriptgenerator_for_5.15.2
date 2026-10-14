@@ -36,6 +36,23 @@
     </modify-function>
   </object-type>
 
+  <!-- Qt 6: QSslSocket::supportedCiphers() moved to QSslConfiguration, but
+       the smoke suite calls it on QSslSocket; forward it on the constructor
+       (static surface) after the ctor object exists. -->
+  <object-type name="QSslSocket">
+    <inject-code class="native" position="constructor-initialization">
+    {
+        QScriptValue supportedCiphersFun = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                (void) ctx;
+                QList&lt;QSslCipher&gt; ciphers = QSslConfiguration::supportedCiphers();
+                return qScriptValueFromSequence(eng, ciphers);
+            }, 0);
+        ctor.setProperty(QString::fromLatin1(&quot;supportedCiphers&quot;), supportedCiphersFun, QScriptValue::SkipInEnumeration);
+    }
+    </inject-code>
+  </object-type>
+
   <object-type name="QLocalServer">
     <modify-function signature="waitForNewConnection(int,bool*)">
       <modify-argument index="2">
@@ -52,5 +69,10 @@
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslCertificate' has equals operators but no qHash() function"/>
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslCipher' has equals operators but no qHash() function"/>
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslConfiguration' has equals operators but no qHash() function"/>
+
+  <!-- Qt 6: core's blanket signature-mismatch suppressor lives in the core
+       qtscript typesystem; the network build loads core with generate="no"
+       but still needs the same suppression for its own rules. -->
+  <suppress-warning text="WARNING(MetaJavaBuilder) :: signature '*' for function modification in '*' not found. Possible candidates: " />
 
 </typesystem>
