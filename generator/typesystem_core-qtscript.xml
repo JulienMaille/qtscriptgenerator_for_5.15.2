@@ -823,14 +823,36 @@
   </object-type>
 
   <object-type name="QTextStream">
-      <modify-function signature="setCodec(const char *)"> 
-        <modify-argument index="1">
-          <replace-type modified-type="QString"/>
-          <conversion-rule class="native">
-            <insert-template name="core.convert_string_arg_to_char*"/>
-          </conversion-rule>            
-        </modify-argument>
-      </modify-function>
+    <!-- Qt 6: setEncoding takes a QStringConverter::Encoding enum that
+         arrives from script as a number or an enum-variant object. The
+         generated metatype cast only accepts an exact variant match, so
+         validate with inline native code here: numbers map by value,
+         variants unwrap, and anything else (including QTextStream status
+         enums) throws TypeError while out-of-range values throw RangeError.
+         NOTE: this lives here (not -common) because merge.xsl appends the
+         -qtscript nodes to the -common entry; a duplicate QTextStream entry
+         in -common would collide. -->
+    <modify-function signature="setEncoding(QStringConverter::Encoding)">
+      <modify-argument index="1">
+        <replace-type modified-type="QStringConverter::Encoding"/>
+        <conversion-rule class="native">
+        const QScriptValue %in%_value = %in%;
+        const QVariant %in%_variant = %in%_value.isVariant() ? %in%_value.toVariant() : QVariant();
+        if (!%in%_value.isNumber() &amp;&amp; %in%_variant.userType() != qMetaTypeId&lt;QStringConverter::Encoding&gt;())
+            return context-&gt;throwError(QScriptContext::TypeError,
+                                       QString::fromLatin1("%CLASS_NAME%.%FUNCTION_NAME%(): expected QStringConverter.Encoding"));
+        const double %in%_numeric = %in%_value.isNumber() ? %in%_value.toNumber()
+            : static_cast&lt;int&gt;(%in%_variant.value&lt;QStringConverter::Encoding&gt;());
+        if (!(0 &lt;= %in%_numeric &amp;&amp; %in%_numeric &lt;= static_cast&lt;int&gt;(QStringConverter::LastEncoding))
+            || %in%_numeric != static_cast&lt;int&gt;(%in%_numeric))
+            return context-&gt;throwError(QScriptContext::RangeError,
+                                       QString::fromLatin1("%CLASS_NAME%.%FUNCTION_NAME%(): invalid encoding"));
+        QStringConverter::Encoding %out% = %in%_value.isNumber()
+            ? static_cast&lt;QStringConverter::Encoding&gt;(static_cast&lt;int&gt;(%in%_numeric))
+            : %in%_variant.value&lt;QStringConverter::Encoding&gt;();
+        </conversion-rule>
+      </modify-argument>
+    </modify-function>
 
       <modify-function signature="operator&lt;&lt;(QBool)"> 
           <rename to="writeBoolean"/> 
@@ -1483,14 +1505,8 @@
             <remove />
         </modify-function>
 
-        <modify-function signature="setCodec(const char*)">
-          <modify-argument index="1">
-            <replace-type modified-type="QString"/>
-            <conversion-rule class="native">
-              <insert-template name="core.convert_string_arg_to_char*"/>
-            </conversion-rule>
-          </modify-argument>
-        </modify-function>
+        <!-- Qt 6: setCodec() was removed; the stale rule would warn
+             "signature not found". Kept as documentation of the removal. -->
 
         <modify-function signature="writeCurrentToken(QXmlStreamReader)">
           <modify-argument index="1">

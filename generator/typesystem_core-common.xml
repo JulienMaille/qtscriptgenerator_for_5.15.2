@@ -525,7 +525,6 @@
   <enum-type name="QSettings::Status"/>
   <enum-type name="QSocketNotifier::Type"/>
   <enum-type name="QSystemLocale::QueryType"/>
-  <enum-type name="QTextCodec::ConversionFlag" flags="QTextCodec::ConversionFlags"/>
   <enum-type name="QTextStream::FieldAlignment"/>
   <enum-type name="QTextStream::NumberFlag" flags="QTextStream::NumberFlags"/>
   <enum-type name="QTextStream::RealNumberNotation"/>
@@ -832,22 +831,37 @@
     <modify-function signature="operator=(QLocale)" remove="all"/>
   </value-type>
 
-  <!-- Qt 6: encoding enum holder; QTextStream.encoding()/setEncoding() and
-       script-side QStringConverter.Utf8 need the enum bound -->
-  <object-type name="QStringConverter">
-    <!-- Utility base: protected ctor/dtor, deleted copy; the shell cannot
-         compile (protected base dtor) and script needs no instances (the
-         oracle exposes a namespace-style object). Remove instance surface so
-         no shell generates; statics + Encoding enum still bind. -->
-    <modify-function signature="~QStringConverter()" remove="all"/>
-    <modify-function signature="QStringConverter()" remove="all"/>
-    <modify-function signature="QStringConverter(const QStringConverter&amp;)" remove="all"/>
-    <modify-function signature="QStringConverter(QStringConverter&amp;&amp;)" remove="all"/>
-    <modify-function signature="operator=(const QStringConverter&amp;)" remove="all"/>
-    <modify-function signature="operator=(QStringConverter&amp;&amp;)" remove="all"/>
-  </object-type>
-  <enum-type name="QStringConverter::Encoding"/>
+  <!-- Qt 6: QTextCodec/QTextDecoder/QTextEncoder are removed (Qt 5.15
+       deprecated, Qt 6 gone). The oracle replaced them with a hand-written
+       QStringConverter namespace object holding only the Encoding enum;
+       codecs/converters themselves are deliberately not bound. Suppress the
+       legacy classes outright so no stale codec surface generates.
+       NOTE: <rejection> only gates DOM traversal; the class entries below
+       would still resolve in translateType(), so the entries themselves are
+       deleted (see QTextCodec/QTextDecoder/QTextEncoder further down). -->
+  <rejection class="QTextCodec"/>
+  <rejection class="QTextDecoder"/>
+  <rejection class="QTextEncoder"/>
+  <rejection class="QTextCodec::ConverterState"/>
+  <rejection class="QTextCodecFactoryInterface"/>
+  <rejection class="QTextCodecPlugin"/>
 
+  <!-- Qt 6: the oracle's QStringConverter binding is a hand-written
+       namespace object (create function + Encoding enum helpers only, with a
+       static_assert pinning the encoding list). The generator's class output
+       cannot emit that shape. BOTH entries below resolve signatures; neither
+       may suppress the other. generate="no" is therefore NOT used here (it
+       would mark GenerateForSubclass and, worse, enum entries inherit the
+       file-level generation flag which findType() then skips). Instead the
+       class file is kept out of the build by OMITTING it from emission (see
+       ClassGenerator::shouldGenerate note for suppressed holders): the
+       object-type entry stays for resolution while the .pri/init emission
+       skips QStringConverter explicitly.
+       NOTE: the entry must stay an object-type (not a rejection): the enum
+       attaches to the holder meta class, and translateType resolves the
+       Encoding return/argument through it. -->
+  <object-type name="QStringConverter"/>
+  <enum-type name="QStringConverter::Encoding"/>
 
   <value-type name="QBitArray">
     <modify-function signature="operator[](int)" remove="all"/>
@@ -1052,63 +1066,6 @@
       <include file-name="QUrl" location="global"/>
     </extra-includes>
   </object-type>
-  <object-type name="QTextCodec">
-
-    <modify-function signature="setCodecForTr(QTextCodec*)">
-      <access modifier="private"/>
-      <modify-argument index="1">
-        <reference-count action="set" variable-name="__rcCodecForTr"/>
-      </modify-argument>
-    </modify-function>
-    <modify-function signature="setCodecForCStrings(QTextCodec*)">
-      <modify-argument index="1">
-        <reference-count action="set" variable-name="__rcCodecForCStrings"/>
-      </modify-argument>
-    </modify-function>
-    <modify-function signature="setCodecForLocale(QTextCodec*)">
-      <modify-argument index="1">
-        <reference-count action="set" variable-name="__rcCodecForLocale"/>
-      </modify-argument>
-    </modify-function>
-
-
-    <modify-function signature="codecForTr()">
-      <remove/>
-    </modify-function>
-
-    <modify-function signature="QTextCodec()">
-      <modify-argument index="-1">
-        <define-ownership class="java" owner="c++"/>
-      </modify-argument>
-    </modify-function>
-
-    <modify-function signature="fromUnicode(const QChar*,int,QTextCodec::ConverterState*)const">
-      <remove/>
-    </modify-function>
-
-    <modify-function signature="toUnicode(const char*,int,QTextCodec::ConverterState*)const">
-      <remove/>
-    </modify-function>
-
-    <modify-function signature="toUnicode(const char*)const">
-      <remove/>
-    </modify-function>
-  </object-type>
-
-  <interface-type name="QTextCodecFactoryInterface" java-name="QAbstractTextCodecFactory" />
-  <object-type name="QTextCodecPlugin" />
-
-  <object-type name="QTextDecoder">
-    <modify-function signature="toUnicode(const char*,int)">
-      <remove/>
-    </modify-function>
-    <modify-function signature="toUnicode(QString*,const char*,int)" remove="all"/>
-  </object-type>
-  <object-type name="QTextEncoder">
-    <modify-function signature="fromUnicode(const QChar*,int)">
-      <remove/>
-    </modify-function>
-  </object-type>
   <object-type name="QTimeLine"/>
   <object-type name="QTranslator">
     <modify-function signature="translate(const char*,const char*,const char*,int)const">
@@ -1126,10 +1083,6 @@
     <extra-includes>
       <include file-name="QStringList" location="global"/>
     </extra-includes>
-  </object-type>
-
-  <object-type name="QTextCodec::ConverterState">
-    <include file-name="QTextCodec" location="global"/>
   </object-type>
 
   <object-type name="QBuffer">
@@ -1437,12 +1390,8 @@
       <remove/>
     </modify-function>
 
-
-    <modify-function signature="setCodec(QTextCodec *)">
-      <modify-argument index="1">
-        <reference-count action="set" variable-name="__rcCodec"/>
-      </modify-argument>
-    </modify-function>
+    <!-- Qt 6: setCodec(QTextCodec*) was removed with QTextCodec; the stale
+         rule would warn "signature not found". Kept as documentation. -->
 
     <modify-function signature="QTextStream(QIODevice *)">
       <modify-argument index="1">

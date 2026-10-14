@@ -67,7 +67,20 @@ QString ClassGenerator::fileNameForClass(const AbstractMetaClass *meta_class) co
 bool ClassGenerator::shouldGenerate(const AbstractMetaClass *meta_class) const
 {
     uint cg = meta_class->typeEntry()->codeGeneration();
-    return (cg & TypeEntry::GenerateCode) != 0;
+    if ((cg & TypeEntry::GenerateCode) == 0)
+        return false;
+    // Qt 6: enum-holder classes whose binding is hand-written in the bindings
+    // repo (e.g. QStringConverter, whose oracle shape is a namespace object
+    // the emitter cannot produce). The typesystem keeps a resolving
+    // object-type entry (signatures + enum attach to the holder meta class)
+    // but the class file itself must not emit; the hand-written file takes
+    // its place in the .pri. Keep this list to one-off oracle shapes only.
+    static const char *suppressedHolders[] = { "QStringConverter", 0 };
+    for (int i = 0; suppressedHolders[i] != 0; ++i) {
+        if (meta_class->qualifiedCppName() == QLatin1String(suppressedHolders[i]))
+            return false;
+    }
+    return true;
 }
 
 static QString normalizedType(QString typeName)
@@ -1309,7 +1322,11 @@ void declareFunctionMetaTypes(QTextStream &stream, const AbstractMetaFunctionLis
 */
 static bool shouldIgnoreEnum(const AbstractMetaEnum *enom)
 {
-    return !enom->wasPublic() || (enom->name() == "enum_1");
+    // Qt 6: wasPublic() reads the snapshot taken at traversal time, which
+    // predates the entry-authorized Public marking in traverseEnum() (the
+    // snapshot is taken by callers AFTER traverseEnum returns). Accept
+    // either the snapshot or the current attributes.
+    return !(enom->wasPublic() || enom->isPublic()) || (enom->name() == "enum_1");
 }
 
 /*!
@@ -2071,6 +2088,23 @@ void ClassGenerator::write(QTextStream &stream, const AbstractMetaClass *meta_cl
     writeInjectedCode(stream, meta_class, CodeSnip::End);
 
     QString packName = meta_class->package().replace(".", "_");
+    // Qt 6: suppressed holders (see shouldGenerate) resolve signatures and
+    // own their enums, but their class file -- and therefore their .pri and
+    // init entries -- must not emit. The hand-written oracle file takes the
+    // class slot instead; enums still resolve because the holder meta class
+    // exists in the model either way.
+    {
+        static const char *suppressedHolders[] = { "QStringConverter", 0 };
+        bool suppressed = false;
+        for (int i = 0; suppressedHolders[i] != 0; ++i) {
+            if (meta_class->qualifiedCppName() == QLatin1String(suppressedHolders[i])) {
+                suppressed = true;
+                break;
+            }
+        }
+        if (suppressed)
+            return;
+    }
     priGenerator->addSource(packName, fileNameForClass(meta_class));
     setupGenerator->addClass(meta_class);
 }

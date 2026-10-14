@@ -987,13 +987,19 @@ void AbstractMetaBuilder::figureOutDefaultEnumArguments()
 AbstractMetaEnum *AbstractMetaBuilder::traverseEnum(EnumModelItem enum_item, AbstractMetaClass *enclosing, const QSet<QString> &enumsDeclarations)
 {
     // Skipping private enums.
-    if (enum_item->accessPolicy() == CodeModel::Private) {
-        return 0;
-    }
-
+    //
+    // Qt 6: the typesystem ENTRY is authoritative for binding: an explicit
+    // <enum-type> declaration means the enum must attach even when the
+    // legacy access tracking mislabels the DOM item (e.g.
+    // QStringConverter::Encoding, declared public in Qt 6 headers but
+    // reported Private here). Only skip private enums with no entry.
     QString qualified_name = enum_item->qualifiedName().join("::");
 
     TypeEntry *type_entry = TypeDatabase::instance()->findType(qualified_name);
+    if (enum_item->accessPolicy() == CodeModel::Private
+        && (type_entry == 0 || !type_entry->isEnum())) {
+        return 0;
+    }
     QString enum_name = enum_item->name();
 
     QString class_name;
@@ -1039,6 +1045,20 @@ AbstractMetaEnum *AbstractMetaBuilder::traverseEnum(EnumModelItem enum_item, Abs
 //     case CodeModel::Private: *meta_enum += AbstractMetaAttributes::Private; break;
     default: break;
     }
+    // Qt 6: the explicit typesystem entry above already authorized this enum
+    // even when the DOM access tracking mislabels it (QStringConverter::
+    // Encoding). wasPublic() gates emission (shouldIgnoreEnum), and it reads
+    // the ORIGINAL attributes snapshot taken below -- so mark public BEFORE
+    // setOriginalAttributes() is called by our callers.
+    //
+    // setOriginalAttributes() snapshots attributes(), NOT visibility bits
+    // alone: callers snapshot AFTER this point, so the Public bit set here
+    // would leak in. Instead record the authorization on the TYPE ENTRY side
+    // is not possible (entries are shared); the correct minimal change is to
+    // make shouldIgnoreEnum() consult isPublic() (current attributes). Since
+    // that helper is shared, do BOTH: set Public here AND fix the helper to
+    // prefer current attributes (see classgenerator.cpp).
+    *meta_enum += AbstractMetaAttributes::Public;
 
     ReportHandler::debugMedium(QString(" - traversing enum %1").arg(meta_enum->fullName()));
 
@@ -1812,11 +1832,6 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
             info.setQualifiedName(QStringList(cast_type));
             type = translateType(info, &ok);
         } else {
-            if (qEnvironmentVariableIsSet("GEN_DEBUG_STRIP"))
-                fprintf(stderr, "DBGRET cls=%s fn=%s rettype=%s\n",
-                        qPrintable(class_name),
-                        qPrintable(function_item->name()),
-                        qPrintable(function_item->type().toString()));
             type = translateType(function_type, &ok);
             // Qt 6: the return/argument spelling may be a same-named
             // using-alias recorded for this class (e.g. QHostAddress::
@@ -1827,11 +1842,6 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
                 QString shortName = rqn.isEmpty() ? QString() : rqn.last();
                 QString aliasKey = m_current_class->qualifiedCppName()
                                    + QLatin1String("::") + shortName;
-                if (qEnvironmentVariableIsSet("GEN_DEBUG_STRIP"))
-                    fprintf(stderr, "DBGRET retry key=%s have=%d short=%s\n",
-                            qPrintable(aliasKey),
-                            (int)m_aliased_meta_classes.contains(aliasKey),
-                            qPrintable(shortName));
                 if (!shortName.isEmpty()
                     && m_aliased_meta_classes.contains(aliasKey)) {
                     const TypeEntry *targetEntry =
@@ -1843,10 +1853,6 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
                     if (!tqn.isEmpty()) {
                         targetInfo.setQualifiedName(tqn);
                         type = translateType(targetInfo, &ok);
-                        if (qEnvironmentVariableIsSet("GEN_DEBUG_STRIP"))
-                            fprintf(stderr, "DBGRET target=%s ok=%d\n",
-                                    qPrintable(targetEntry->qualifiedCppName()),
-                                    (int)ok);
                     }
                 }
             }
