@@ -703,6 +703,10 @@
     <reject-enum-value name="WA_MacMetalStyle"/>
   </enum-type>
 
+  <enum-type name="QJsonDocument::JsonFormat"/>
+  <enum-type name="QJsonParseError::ParseError"/>
+  <enum-type name="QJsonValue::Type"/>
+
   <value-type name="QProcessEnvironment" />
   <!-- Qt 6: QBasicTimer is move-only; deferred (no usable script surface) -->
   <rejection class="QBasicTimer"/>
@@ -751,6 +755,51 @@
     <modify-function signature="operator=(QString)" remove="all"/>
     <modify-function signature="addResourceSearchPath(QString)" remove="all"/>
     <!--### Obsolete in 4.3-->
+  </value-type>
+
+  <!-- Qt JSON value types: implicitly shared, no QObject surface. The
+       generator binds the parse/serialize/document/object/array/value API;
+       QJsonValueRef iterator helpers have no script meaning and are left
+       out via the rejected helper classes below. -->
+  <value-type name="QJsonDocument">
+    <modify-function signature="operator=(QJsonDocument)" remove="all"/>
+  </value-type>
+  <value-type name="QJsonObject">
+    <modify-function signature="operator=(QJsonObject)" remove="all"/>
+  </value-type>
+  <value-type name="QJsonArray">
+    <modify-function signature="operator=(QJsonArray)" remove="all"/>
+  </value-type>
+  <value-type name="QJsonValue">
+    <modify-function signature="operator=(QJsonValue)" remove="all"/>
+  </value-type>
+  <value-type name="QJsonParseError">
+    <!-- The generator binds methods, not public data members. Expose the
+         error/offset fields as read-only script properties. -->
+    <inject-code class="native" position="prototype-initialization">
+    {
+        QScriptValue errorGetter = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QJsonParseError *self = qscriptvalue_cast&lt;QJsonParseError*&gt;(ctx-&gt;thisObject());
+                if (!self)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QJsonParseError.error: expected a QJsonParseError"));
+                return qScriptValueFromValue(eng, self-&gt;error);
+            }, 0);
+        proto.setProperty(QString::fromLatin1("error"), errorGetter,
+            QScriptValue::PropertyGetter | QScriptValue::SkipInEnumeration);
+        QScriptValue offsetGetter = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QJsonParseError *self = qscriptvalue_cast&lt;QJsonParseError*&gt;(ctx-&gt;thisObject());
+                if (!self)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QJsonParseError.offset: expected a QJsonParseError"));
+                return QScriptValue(eng, self-&gt;offset);
+            }, 0);
+        proto.setProperty(QString::fromLatin1("offset"), offsetGetter,
+            QScriptValue::PropertyGetter | QScriptValue::SkipInEnumeration);
+    }
+    </inject-code>
   </value-type>
 
   <value-type name="QPoint"/>
