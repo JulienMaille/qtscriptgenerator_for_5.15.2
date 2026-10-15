@@ -1,13 +1,18 @@
 <?xml version="1.0"?>
-<typesystem package="com.trolltech.qt.svg"><load-typesystem name="typesystem_core.xml" generate="no"/><load-typesystem name="typesystem_gui.xml" generate="no"/><rejection class="QGraphicsSvgItem"/>
-   <namespace-type name="QSvg"/>
+<typesystem package="com.trolltech.qt.svg"><load-typesystem name="typesystem_core.xml" generate="no"/><load-typesystem name="typesystem_gui.xml" generate="no"/>
+   <namespace-type name="QtSvg"/>
+
+  <!-- Qt 6: declare the option enum so QtSvg::Options resolves here instead
+       of colliding with QFileDialog::Option through the short-name flags
+       fallback (visible once the widgets typesystem loads). -->
+  <enum-type name="QtSvg::Option" flags="QtSvg::Options"/>
 
   <enum-type name="QGraphicsSvgItem::enum_1"/>
 
   <object-type name="QSvgRenderer">
     <extra-includes>
         <include file-name="QRectF" location="global"/>
-        <include file-name="QMatrix" location="global"/>
+        <!-- Qt 6 QSvgRenderer has no matrix API; QMatrix itself is gone. -->
         <include file-name="QSize" location="global"/>
         <include file-name="QByteArray" location="global"/>
     </extra-includes>
@@ -22,6 +27,10 @@
   </object-type>
 
   <object-type name="QSvgGenerator">
+    <!-- Qt 6.8 declares SvgVersion as a scoped enum without Q_ENUM, which the
+         parser does not capture; the version constructor and svgVersion()
+         are covered by the curated binding instead (see
+         apply-curated-svg.ps1). -->
     <modify-function signature="setOutputDevice(QIODevice*)">
         <modify-argument index="1">
             <reference-count action="set" variable-name="__rcOutputDevice"/>
@@ -35,11 +44,6 @@
         <include file-name="QSvgRenderer" location="global"/>
         <include file-name="QSize" location="global"/>
     </extra-includes>
-
-    <modify-function signature="matrix()const" remove="all"/>
-    <modify-function signature="resetMatrix()" remove="all"/>
-    <modify-function signature="sceneMatrix()const" remove="all"/>
-    <modify-function signature="setMatrix(QMatrix, bool)" remove="all"/>
  </object-type>
 
 </typesystem>
