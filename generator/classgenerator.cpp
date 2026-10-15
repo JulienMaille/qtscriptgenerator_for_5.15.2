@@ -298,6 +298,12 @@ static void writeArgumentTypeTests(QTextStream &stream, const AbstractMetaFuncti
             stream << scriptArg << ".isArray()";
         } else if (typeName == "QVariant") {
             stream << "true";
+        } else if (typeName == "QAnyStringView" || typeName == "QStringView"
+                   || typeName == "QByteArrayView") {
+            // Qt 6: views convert from script strings (and QByteArray/enum
+            // variants) via owning locals; the metatype-id test would only
+            // match an actual view variant, so test the convertible forms.
+            stream << "(" << scriptArg << ".isString() || " << scriptArg << ".isVariant())";
         } else {
             QString tester = builtinTypeTesterFunction(typeName);
             if (!tester.isEmpty()) {

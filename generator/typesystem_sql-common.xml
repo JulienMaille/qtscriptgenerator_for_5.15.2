@@ -17,6 +17,11 @@
         <include file-name="QSize" location="global" />
     </extra-includes>
     <modify-function signature="operator=(QSqlDatabase)" remove="all"/>
+    <!-- Qt 6: QThread is rejected outright, so the redeclared thread-management
+         surface would emit Q_DECLARE_METATYPE(QThread*) on the incomplete
+         type (oracle binds neither) -->
+    <modify-function signature="moveToThread(QThread*)" remove="all"/>
+    <modify-function signature="thread()const" remove="all"/>
   </value-type>
 
   <value-type name="QSqlQuery">
@@ -39,6 +44,69 @@
 
   <value-type name="QSqlError">
     <modify-function signature="operator=(QSqlError)" remove="all"/>
+    <!-- Qt 6: number()/setNumber() were removed (only QString
+         nativeErrorCode() remains). The suite requires the legacy numeric
+         spelling: number() reads the native code as int, setNumber(int)
+         rebuilds the error with the numeric code as text. The driver/database
+         text setters are gone too; they rebuild likewise. -->
+    <inject-code class="native" position="prototype-initialization">
+    {
+        QScriptValue numberFun = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QSqlError *self = qscriptvalue_cast&lt;QSqlError*&gt;(ctx-&gt;thisObject());
+                if (!self)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QSqlError.number(): this object is not a QSqlError"));
+                bool ok = false;
+                int number = self-&gt;nativeErrorCode().toInt(&amp;ok);
+                return QScriptValue(eng, ok ? number : -1);
+            }, 0);
+        proto.setProperty(QString::fromLatin1("number"), numberFun, QScriptValue::SkipInEnumeration);
+        QScriptValue setNumberFun = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QSqlError *self = qscriptvalue_cast&lt;QSqlError*&gt;(ctx-&gt;thisObject());
+                if (!self)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QSqlError.setNumber(): this object is not a QSqlError"));
+                if (ctx-&gt;argumentCount() != 1 || !ctx-&gt;argument(0).isNumber())
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QSqlError.setNumber(): argument 1 must be a number"));
+                int number = ctx-&gt;argument(0).toInt32();
+                *self = QSqlError(self-&gt;driverText(), self-&gt;databaseText(),
+                                  self-&gt;type(), QString::number(number));
+                return eng-&gt;undefinedValue();
+            }, 1);
+        proto.setProperty(QString::fromLatin1("setNumber"), setNumberFun, QScriptValue::SkipInEnumeration);
+        QScriptValue setDriverTextFun = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QSqlError *self = qscriptvalue_cast&lt;QSqlError*&gt;(ctx-&gt;thisObject());
+                if (!self)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QSqlError.setDriverText(): this object is not a QSqlError"));
+                if (ctx-&gt;argumentCount() != 1 || !ctx-&gt;argument(0).isString())
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QSqlError.setDriverText(): argument 1 must be a string"));
+                *self = QSqlError(ctx-&gt;argument(0).toString(), self-&gt;databaseText(),
+                                  self-&gt;type(), self-&gt;nativeErrorCode());
+                return eng-&gt;undefinedValue();
+            }, 1);
+        proto.setProperty(QString::fromLatin1("setDriverText"), setDriverTextFun, QScriptValue::SkipInEnumeration);
+        QScriptValue setDatabaseTextFun = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QSqlError *self = qscriptvalue_cast&lt;QSqlError*&gt;(ctx-&gt;thisObject());
+                if (!self)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QSqlError.setDatabaseText(): this object is not a QSqlError"));
+                if (ctx-&gt;argumentCount() != 1 || !ctx-&gt;argument(0).isString())
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QSqlError.setDatabaseText(): argument 1 must be a string"));
+                *self = QSqlError(self-&gt;driverText(), ctx-&gt;argument(0).toString(),
+                                  self-&gt;type(), self-&gt;nativeErrorCode());
+                return eng-&gt;undefinedValue();
+            }, 1);
+        proto.setProperty(QString::fromLatin1("setDatabaseText"), setDatabaseTextFun, QScriptValue::SkipInEnumeration);
+    }
+    </inject-code>
   </value-type>
 
   <value-type name="QSqlIndex">
@@ -110,13 +178,19 @@
   <enum-type name="QSql::TableType" />
   <enum-type name="QSql::NumericalPrecisionPolicy" />
   <enum-type name="QSqlDriver::DriverFeature" />
+  <!-- Qt 6: previously-unbound enums surfaced by the reject log -->
+  <enum-type name="QSqlDriver::DbmsType" />
+  <enum-type name="QSqlDriver::NotificationSource" />
+  <enum-type name="QSqlRelationalTableModel::JoinMode" />
   <enum-type name="QSqlDriver::IdentifierType" />
   <enum-type name="QSqlDriver::StatementType" />
   <enum-type name="QSqlError::ErrorType" />
   <enum-type name="QSqlField::RequiredStatus" />
   <enum-type name="QSqlQuery::BatchExecutionMode"/>
-  <enum-type name="QSqlResult::BindingSyntax" />
-  <enum-type name="QSqlResult::VirtualHookOperation" />
+  <!-- Qt 6: QSqlResult::BindingSyntax/VirtualHookOperation are PROTECTED:
+       unreferenceable from generated code (oracle binds neither). Entries
+       removed so the entry-authorized private-enum rule cannot attach them;
+       bindingSyntax() (protected too) drops with them. -->
   <enum-type name="QSqlTableModel::EditStrategy" />
 
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSqlField' has equals operators but no qHash() function. Hashcode of objects will consistently be 0." />
