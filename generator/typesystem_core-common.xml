@@ -454,6 +454,20 @@
     <extra-includes>
       <include file-name="QGesture" location="global"/>
     </extra-includes>
+    <!-- Qt 6 removed the Qt 5 ItemDataRole spellings. Keep them as aliases of
+         the surviving native values so Qt 5 scripts (QCAD) keep resolving
+         Qt.BackgroundColorRole / Qt.TextColorRole. -->
+    <inject-code class="native" position="constructor-initialization">
+    {
+        const QScriptValue::PropertyFlags aliasFlags = QScriptValue::ReadOnly | QScriptValue::Undeletable;
+        const QScriptValue backgroundRole = ctor.property(QString::fromLatin1("BackgroundRole"));
+        if (backgroundRole.isValid())
+            ctor.setProperty(QString::fromLatin1("BackgroundColorRole"), backgroundRole, aliasFlags);
+        const QScriptValue foregroundRole = ctor.property(QString::fromLatin1("ForegroundRole"));
+        if (foregroundRole.isValid())
+            ctor.setProperty(QString::fromLatin1("TextColorRole"), foregroundRole, aliasFlags);
+    }
+    </inject-code>
   </namespace-type>
 
   <enum-type name="QDate::MonthNameType" />
@@ -574,6 +588,9 @@
   <enum-type name="Qt::ItemFlag" flags="Qt::ItemFlags"/>
   <enum-type name="Qt::ItemSelectionMode"/>
   <enum-type name="Qt::KeyboardModifier" flags="Qt::KeyboardModifiers"/>
+  <enum-type name="Qt::MouseEventSource"/>
+  <enum-type name="Qt::MouseEventFlag" flags="Qt::MouseEventFlags"/>
+  <enum-type name="Qt::ScrollPhase"/>
   <enum-type name="Qt::LayoutDirection"/>
   <enum-type name="Qt::MatchFlag" flags="Qt::MatchFlags"/>
   <enum-type name="Qt::Modifier"/>
