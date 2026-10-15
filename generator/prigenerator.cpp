@@ -60,7 +60,9 @@ void PriGenerator::generate()
     while (pri.hasNext()) {
         pri.next();
         QStringList list = pri.value().headers;
-        if (list.isEmpty())
+        // Qt 6: a module without shell classes (e.g. QtXml) has no headers,
+        // but it still needs a .pri to list its generated sources.
+        if (list.isEmpty() && pri.value().sources.isEmpty())
             continue;
 
         QString folder = pri.key();
