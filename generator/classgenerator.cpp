@@ -294,7 +294,25 @@ static void writeArgumentTypeTests(QTextStream &stream, const AbstractMetaFuncti
             typeName = normalizedType(argType);
         }
         QString scriptArg = QString::fromLatin1("context->argument(%0)").arg(i);
-        if (argType && isSequenceType(argType)) {
+        // Qt 6: a flags-typed parameter converts from both the flags value
+        // and a lone enum value (see the flags fromScriptValue functions),
+        // but the metatype-id test below only matches the flags variant.
+        // Script widely passes single enum values where flags are expected
+        // (e.g. Qt.LeftButton for Qt::MouseButtons), which would make every
+        // same-arity overload unmatchable. Accept the enum twin as well.
+        const TypeEntry *testEntry = argType ? argType->typeEntry() : 0;
+        const FlagsTypeEntry *flagsEntry = 0;
+        if (testEntry && testEntry->isFlags())
+            flagsEntry = static_cast<const FlagsTypeEntry *>(testEntry);
+        if (flagsEntry && flagsEntry->originator()) {
+            QString enumName = flagsEntry->originator()->qualifiedCppName();
+            stream << "((qMetaTypeId<" << typeName;
+            if (typeName.endsWith(QLatin1Char('>')))
+                stream << " ";
+            stream << ">() == " << scriptArg << ".toVariant().userType())"
+                   << " || (qMetaTypeId<" << enumName << ">() == "
+                   << scriptArg << ".toVariant().userType()))";
+        } else if (argType && isSequenceType(argType)) {
             stream << scriptArg << ".isArray()";
         } else if (typeName == "QVariant") {
             stream << "true";
@@ -407,7 +425,12 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                     QMetaObject::normalizedType(argType->cppSignature().toLatin1()));
                 if (declaredName.endsWith(QLatin1Char('&')))
                     declaredName.chop(1);
-                if (declaredName.startsWith(QLatin1String("const ")))
+                // Qt 6: keep const for pointer targets (const char** must not
+                // become char**: multi-level const loss breaks compilation
+                // and diverges from the dispatch test spelling). Mirrors
+                // normalizedType()'s rule above.
+                if (!declaredName.endsWith(QLatin1Char('*'))
+                    && declaredName.startsWith(QLatin1String("const ")))
                     declaredName.remove(0, 6);
             }
             // Qt 6: QAnyStringView/QStringView are non-owning views with no
@@ -456,37 +479,55 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                 narrowTarget = declaredName;
             // ### generalize the QSet check (we should check if the type has push_back())
             bool useToSequence = argType && isSequenceType(argType) && !argType->name().startsWith("Set");
-            // Qt 6: mutable value-type references (e.g. swap(QNetworkRequest&))
-            // must alias the script object, not a copy: cast to pointer,
-            // throw TypeError on null (mirrors the oracle), and bind a C++
-            // reference local so the native call mutates through. Only for
-            // value types; const-refs keep copy semantics (temporaries must
-            // bind), QObject/primitive/enum/sequence paths are untouched.
-            // NOTE: this block emits NOTHING yet -- it only decides; the
-            // actual emission happens below (mutableRefTarget non-empty).
-            QString mutableRefTarget;
-            if (!useToSequence && argType && argType->isReference() && !argType->isConstant()
-                && argType->typeEntry() && argType->typeEntry()->isValue()) {
-                mutableRefTarget = declaredName.isEmpty() ? typeName : declaredName;
-                if (mutableRefTarget.endsWith(QLatin1Char('&')))
-                    mutableRefTarget.chop(1);
-                mutableRefTarget = mutableRefTarget.trimmed();
+            // Qt 6: reference arguments that cannot be copied must alias the
+            // script object through a pointer (with a TypeError null check
+            // mirroring the oracle) instead of a value copy:
+            // - mutable value-type references (e.g. swap(QNetworkRequest&));
+            // - any reference to a QObject (const or not; QObjects are never
+            //   copyable, e.g. operator==(const QInputDevice&)).
+            // Const value-type references keep copy semantics (temporaries
+            // must bind); QObject/primitive/enum/sequence paths otherwise
+            // untouched. NOTE: this block emits NOTHING yet -- it only
+            // decides; the actual emission happens below (refTarget non-empty
+            // with its constness flag).
+            QString refTarget;
+            bool refIsConst = false;
+            if (!useToSequence && argType && argType->isReference() && argType->typeEntry()) {
+                const TypeEntry *entry = argType->typeEntry();
+                bool isMutableValueRef = !argType->isConstant() && entry->isValue();
+                bool isQObjectRef = entry->isComplex()
+                    && static_cast<const ComplexTypeEntry *>(entry)->isQObject();
+                if (isMutableValueRef || isQObjectRef) {
+                    refTarget = declaredName.isEmpty() ? typeName : declaredName;
+                    if (refTarget.endsWith(QLatin1Char('&')))
+                        refTarget.chop(1);
+                    refTarget = refTarget.trimmed();
+                    refIsConst = argType->isConstant();
+                }
             }
-            if (!mutableRefTarget.isEmpty()) {
-                // Emission for the mutable-reference case decided above.
+            if (!refTarget.isEmpty()) {
+                // Emission for the reference case decided above.
                 // The generic declaration line below must NOT emit (it would
                 // declare _q_argN twice); instead declare the pointer, null-
                 // check with TypeError, and bind the reference local.
-                stream << indentStr << mutableRefTarget << "* " << actualOut << "_ptr = "
-                       << "qscriptvalue_cast<" << mutableRefTarget << "*>(" << actualIn << ");" << endl;
+                stream << indentStr << refTarget << "* " << actualOut << "_ptr = "
+                       << "qscriptvalue_cast<" << refTarget << "*>(" << actualIn << ");" << endl;
                 QString clsName = (fun->implementingClass() != 0)
                     ? fun->implementingClass()->name() : QLatin1String("?");
+                // Script-visible name (operator_equal binds as "equals").
+                QString scriptFuncName = fun->modifiedName();
+                if (scriptFuncName == QLatin1String("operator_equal"))
+                    scriptFuncName = QLatin1String("equals");
                 stream << indentStr << "if (!" << actualOut << "_ptr)" << endl;
                 stream << indentStr << "    return context->throwError(QScriptContext::TypeError," << endl;
                 stream << indentStr << "        QString::fromLatin1(\"" << clsName << "."
-                       << fun->modifiedName() << "(): argument " << (j + 1)
-                       << " must be a " << mutableRefTarget << "\"));" << endl;
-                stream << indentStr << mutableRefTarget << "& " << actualOut << " = *" << actualOut << "_ptr;" << endl;
+                       << scriptFuncName << "(): argument " << (j + 1)
+                       << " must be a " << refTarget << "\"));" << endl;
+                if (refIsConst)
+                    stream << indentStr << "const ";
+                else
+                    stream << indentStr;
+                stream << refTarget << "& " << actualOut << " = *" << actualOut << "_ptr;" << endl;
                 if (!fun->argumentRemoved(j+1))
                     ++scriptArgIndex;
                 continue;
@@ -679,8 +720,12 @@ static void writeFunctionCallAndReturn(QTextStream &stream, const AbstractMetaFu
                     || (meta_class->name() == QLatin1String("QVector2D"))
                     || (meta_class->name() == QLatin1String("QVector3D"))
                     || (meta_class->name() == QLatin1String("QVector4D"))))) {
-            stream << fun->originalName() << "(";
-            stream << "*_q_self, ";
+            stream << fun->originalName() << "(*_q_self";
+            // Qt 6: converted unary friends (e.g. operator- with the self
+            // argument dropped) prepare zero locals; without this guard the
+            // call ends in a stray comma.
+            if (nativeArgc > 0)
+                stream << ", ";
         } else {
             // Qt 6: overload-shadowing repair (see
             // findPrototypeAndStaticFunctions): functions pulled from a base
@@ -957,6 +1002,11 @@ static void writeEnumClass(QTextStream &stream, const AbstractMetaClass *meta_cl
     QString qualifiedCppNameColons;
     if (meta_class->name() != "Global")
         qualifiedCppNameColons = meta_class->qualifiedCppName() + "::";
+    // Qt 6: scoped enums (enum class) scope their enumerators under the
+    // enum name; C++ references need the extra qualification.
+    QString valueQualifier = qualifiedCppNameColons;
+    if (enom->isScoped())
+        valueQualifier += enom->name() + QString::fromLatin1("::");
     QString qualifiedEnumName = qualifiedCppNameColons + enom->name();
     QString qtScriptEnumName = meta_class->name() + "_" + enom->name();
 
@@ -978,7 +1028,7 @@ static void writeEnumClass(QTextStream &stream, const AbstractMetaClass *meta_cl
         stream << "    ";
         if (i > 0)
             stream << ", ";
-        stream << qualifiedCppNameColons << values.at(uniqueIndexes.at(i))->name() << endl;
+        stream << valueQualifier << values.at(uniqueIndexes.at(i))->name() << endl;
     }
     stream << "};" << endl << endl;
     stream << "static const char * const qtscript_" << qtScriptEnumName << "_keys[] = {" << endl;
@@ -1003,18 +1053,36 @@ static void writeEnumClass(QTextStream &stream, const AbstractMetaClass *meta_cl
         stream << "    return QString::fromLatin1(menum.valueToKey(value));" << endl;
     } else {
         if (contiguous) {
-            stream << "    if ((value >= " << qualifiedCppNameColons
-                   << values.at(uniqueIndexes.first())->name() << ")"
-                   << " && (value <= " << qualifiedCppNameColons
-                   << values.at(uniqueIndexes.last())->name() << "))" << endl
+            // Qt 6: scoped enums (enum class) define no comparison
+            // operators; compare through the underlying integer values.
+            QString cmpValue = QString::fromLatin1("value");
+            QString cmpFirst = valueQualifier
+                + values.at(uniqueIndexes.first())->name();
+            QString cmpLast = valueQualifier
+                + values.at(uniqueIndexes.last())->name();
+            if (enom->isScoped()) {
+                cmpValue = QString::fromLatin1("static_cast<int>(value)");
+                cmpFirst = QString::fromLatin1("static_cast<int>(")
+                    + cmpFirst + QString::fromLatin1(")");
+                cmpLast = QString::fromLatin1("static_cast<int>(")
+                    + cmpLast + QString::fromLatin1(")");
+            }
+            stream << "    if ((" << cmpValue << " >= " << cmpFirst << ")"
+                    << " && (" << cmpValue << " <= " << cmpLast << "))" << endl
                    << "        return qtscript_" << qtScriptEnumName
                    << "_keys[static_cast<int>(value)-static_cast<int>("
-                   << qualifiedCppNameColons
+                   << valueQualifier
                    << values.at(uniqueIndexes.first())->name() << ")];" << endl;
         } else {
-            stream << "    for (int i = 0; i < " << uniqueIndexes.size() << "; ++i) {" << endl
-                   << "        if (qtscript_" << qtScriptEnumName << "_values[i] == value)" << endl
-                   << "            return QString::fromLatin1(qtscript_" << qtScriptEnumName << "_keys[i]);" << endl
+            stream << "    for (int i = 0; i < " << uniqueIndexes.size() << "; ++i) {" << endl;
+            // Qt 6: scoped enums (enum class) define no == operator;
+            // compare through the underlying integer values.
+            if (enom->isScoped()) {
+                stream << "        if (static_cast<int>(qtscript_" << qtScriptEnumName << "_values[i]) == static_cast<int>(value))" << endl;
+            } else {
+                stream << "        if (qtscript_" << qtScriptEnumName << "_values[i] == value)" << endl;
+            }
+            stream << "            return QString::fromLatin1(qtscript_" << qtScriptEnumName << "_keys[i]);" << endl
                    << "    }" << endl;
         }
         stream << "    return QString();" << endl;
@@ -1068,18 +1136,37 @@ static void writeEnumClass(QTextStream &stream, const AbstractMetaClass *meta_cl
                << qualifiedEnumName << ">(arg));" << endl;
     } else {
         if (contiguous) {
-            stream << "    if ((arg >= " << qualifiedCppNameColons
-                   << values.at(uniqueIndexes.first())->name() << ")"
-                   << " && (arg <= " << qualifiedCppNameColons
-                   << values.at(uniqueIndexes.last())->name() << "))" << endl;
+            // Qt 6: scoped enums (enum class) define no comparison
+            // operators; compare through the underlying integer values
+            // (mirrors the toString helper above).
+            QString argValue = QString::fromLatin1("arg");
+            QString argFirst = valueQualifier
+                + values.at(uniqueIndexes.first())->name();
+            QString argLast = valueQualifier
+                + values.at(uniqueIndexes.last())->name();
+            if (enom->isScoped()) {
+                argValue = QString::fromLatin1("static_cast<int>(arg)");
+                argFirst = QString::fromLatin1("static_cast<int>(")
+                    + argFirst + QString::fromLatin1(")");
+                argLast = QString::fromLatin1("static_cast<int>(")
+                    + argLast + QString::fromLatin1(")");
+            }
+            stream << "    if ((" << argValue << " >= " << argFirst << ")"
+                    << " && (" << argValue << " <= " << argLast << "))" << endl;
             stream << "        return qScriptValueFromValue(engine,  static_cast<"
                    << qualifiedEnumName << ">(arg));" << endl;
         } else {
-            stream << "    for (int i = 0; i < " << uniqueIndexes.size() << "; ++i) {" << endl
-                   << "        if (qtscript_" << qtScriptEnumName << "_values[i] == arg)" << endl;
+            stream << "    for (int i = 0; i < " << uniqueIndexes.size() << "; ++i) {" << endl;
+            // Qt 6: scoped enums (enum class) define no == operator;
+            // compare through the underlying integer values.
+            if (enom->isScoped()) {
+                stream << "        if (static_cast<int>(qtscript_" << qtScriptEnumName << "_values[i]) == arg)" << endl;
+            } else {
+                stream << "        if (qtscript_" << qtScriptEnumName << "_values[i] == arg)" << endl;
+            }
             stream << "            return qScriptValueFromValue(engine,  static_cast<"
-                   << qualifiedEnumName << ">(arg));" << endl;
-            stream << "    }" << endl;
+                   << qualifiedEnumName << ">(arg));" << endl
+                   << "    }" << endl;
         }
     }
     stream << "    return context->throwError(QString::fromLatin1(\""

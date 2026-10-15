@@ -42,6 +42,8 @@
 #include "shellgenerator.h"
 #include "reporthandler.h"
 
+#include <QRegularExpression>
+
 #include "metaqtscript.h"
 
 bool ShellGenerator::shouldGenerate(const AbstractMetaClass *meta_class) const
@@ -114,6 +116,56 @@ void ShellGenerator::writeFunctionArguments(QTextStream &s,
 {
     if (numArguments < 0) numArguments = arguments.size();
 
+    // Qt 6: C++ requires trailing defaults to be contiguous: if any argument
+    // from position i on lacks a default, no earlier argument may carry one
+    // either. Precompute per-argument default text (original preferred, else
+    // the translated-fallback below), then emit only the trailing run.
+    QList<QString> defaultFor;
+    for (int i = 0; i < numArguments; ++i) {
+        defaultFor.append(QString());
+        if (!(option & IncludeDefaultExpression))
+            continue;
+        AbstractMetaArgument *arg = arguments.at(i);
+        if (!arg->originalDefaultValueExpression().isEmpty()) {
+            QString expr = arg->originalDefaultValueExpression();
+            if (arg->type()->typeEntry()->isEnum() && expr.indexOf("::") < 0)
+                expr = ((EnumTypeEntry *)arg->type()->typeEntry())->qualifier()
+                       + QLatin1String("::") + expr;
+            defaultFor[i] = expr;
+        } else if (!arg->defaultValueExpression().isEmpty()) {
+            // Translated-fallback for DOM-lost originals (e.g. QPixmap's
+            // filename ctor): reuse only provably C++-valid spellings.
+            QString expr = arg->defaultValueExpression();
+            const TypeEntry *entry = arg->type() ? arg->type()->typeEntry() : 0;
+            bool isPointer = arg->type() && arg->type()->indirections() > 0;
+            if (entry && entry->isPrimitive()) {
+                QRegularExpression numBool("^(true|false|[-+]?[0-9][0-9.]*)$");
+                if (numBool.match(expr).hasMatch())
+                    defaultFor[i] = expr;
+            } else if (isPointer) {
+                if (expr == QLatin1String("null") || expr == QLatin1String("0")
+                    || expr == QLatin1String("nullptr"))
+                    defaultFor[i] = QLatin1String("nullptr");
+                else {
+                    // Qualified no-arg factory calls (e.g.
+                    // QInputDevice::primaryKeyboard()) are valid defaults.
+                    QRegularExpression factory("^[\\w:]+[(][)]$");
+                    if (factory.match(expr).hasMatch())
+                        defaultFor[i] = expr;
+                }
+            } else if (entry && (entry->isEnum() || entry->isFlags())
+                       && expr.indexOf("::") >= 0 && expr.indexOf('.') < 0) {
+                defaultFor[i] = expr;
+            }
+        }
+    }
+    int firstDefault = numArguments;
+    for (int i = numArguments - 1; i >= 0; --i) {
+        if (defaultFor.at(i).isEmpty())
+            break;
+        firstDefault = i;
+    }
+
     for (int i=0; i<numArguments; ++i) {
         if (i != 0)
             s << ", ";
@@ -121,15 +173,8 @@ void ShellGenerator::writeFunctionArguments(QTextStream &s,
         writeTypeInfo(s, arg->type(), option);
         if (!(option & SkipName))
             s << " " << arg->argumentName();
-        if ((option & IncludeDefaultExpression) && !arg->originalDefaultValueExpression().isEmpty()) {
-            s << " = "; 
-
-            QString expr = arg->originalDefaultValueExpression();
-            if (arg->type()->typeEntry()->isEnum() && expr.indexOf("::") < 0)
-                s << ((EnumTypeEntry *)arg->type()->typeEntry())->qualifier() << "::";
-
-            s << expr; 
-        }
+        if (i >= firstDefault)
+            s << " = " << defaultFor.at(i);
     }
 }
 
