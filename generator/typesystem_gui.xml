@@ -1652,8 +1652,14 @@
   <!-- Qt 6: QPaintDevice needs a class entry so QPaintDevice* arguments
        (QPainter::begin, QPaintEngine::begin, shell overrides) resolve. The
        ctor is protected, so the class binds non-constructible (as in the
-       oracle); only pointer casts use it. -->
-  <object-type name="QPaintDevice"/>
+       oracle); only pointer casts use it.
+       Declared as an interface type: QWidget inherits QObject+QPaintDevice,
+       and a plain object-type entry would make both primary bases, tripping
+       the builder's multiple-primary guard and leaving QWidget with no base
+       class (lost QObject prototype chain: children(), qApp-level API).
+       As an interface, QPaintDevice stays a resolvable type but yields the
+       QObject primary, matching Qt 5 stock behavior. -->
+  <interface-type name="QPaintDevice"/>
 
   <object-type name="QPaintEngine">
     <modify-function signature="begin(QPaintDevice*)">
