@@ -469,6 +469,8 @@ bool Parser::parseDeclaration(DeclarationAST *&node)
 
     default:
       {
+        skipAttributeSpecifiers();
+
         const ListNode<std::size_t> *cv = 0;
         parseCvQualify(cv);
 
@@ -1640,6 +1642,36 @@ bool Parser::parseTypeParameter(TypeParameterAST *&node)
   return true;
 }
 
+// Qt 6: C++11 attribute-specifiers ([[nodiscard]], [[maybe_unused]],
+// [[deprecated(...)]] ...) pervade Qt 6 headers. The legacy grammar has no
+// attribute production; leaving them in place desyncs declaration parsing
+// (e.g. the `static` of `[[nodiscard]] static QByteArray fromHex(...)` is
+// lost and the static never binds). Skip balanced [[...]] groups (possibly
+// repeated) so the following specifiers parse normally. A doubled open
+// bracket is unambiguous: valid C++ uses [[ only for attributes.
+bool Parser::skipAttributeSpecifiers()
+{
+  bool skipped = false;
+  while (token_stream.lookAhead() == '['
+         && token_stream.lookAhead(1) == '[')
+    {
+      token_stream.nextToken();
+      token_stream.nextToken();
+      int depth = 2;
+      while (depth > 0 && token_stream.lookAhead() != Token_EOF)
+        {
+          int tk = token_stream.lookAhead();
+          if (tk == '[')
+            ++depth;
+          else if (tk == ']')
+            --depth;
+          token_stream.nextToken();
+        }
+      skipped = true;
+    }
+  return skipped;
+}
+
 bool Parser::parseStorageClassSpecifier(const ListNode<std::size_t> *&node)
 {
   std::size_t start = token_stream.cursor();
@@ -2134,6 +2166,8 @@ bool Parser::parseMemberSpecification(DeclarationAST *&node)
     }
 
   token_stream.rewind((int) start);
+
+  skipAttributeSpecifiers();
 
   const ListNode<std::size_t> *cv = 0;
   parseCvQualify(cv);
@@ -3303,6 +3337,8 @@ bool Parser::parseDeclarationInternal(DeclarationAST *&node)
 
   // that is for the case '__declspec(dllexport) int ...' or
   // '__declspec(dllexport) inline int ...', etc.
+  // Qt 6: leading C++11 attribute-specifiers ([[nodiscard]] static ...).
+  skipAttributeSpecifiers();
   WinDeclSpecAST *winDeclSpec = 0;
   parseWinDeclSpec(winDeclSpec);
 

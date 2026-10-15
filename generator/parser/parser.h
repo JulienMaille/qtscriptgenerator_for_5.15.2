@@ -154,6 +154,7 @@ public:
 				bool onlyIntegral = false);
   bool parseStatement(StatementAST *&node);
   bool parseStorageClassSpecifier(const ListNode<std::size_t> *&node);
+  bool skipAttributeSpecifiers();
   bool parseStringLiteral(StringLiteralAST *&node);
   bool parseSwitchStatement(StatementAST *&node);
   bool parseTemplateArgument(TemplateArgumentAST *&node);

@@ -69,17 +69,6 @@ bool ClassGenerator::shouldGenerate(const AbstractMetaClass *meta_class) const
     uint cg = meta_class->typeEntry()->codeGeneration();
     if ((cg & TypeEntry::GenerateCode) == 0)
         return false;
-    // Qt 6: enum-holder classes whose binding is hand-written in the bindings
-    // repo (e.g. QStringConverter, whose oracle shape is a namespace object
-    // the emitter cannot produce). The typesystem keeps a resolving
-    // object-type entry (signatures + enum attach to the holder meta class)
-    // but the class file itself must not emit; the hand-written file takes
-    // its place in the .pri. Keep this list to one-off oracle shapes only.
-    static const char *suppressedHolders[] = { "QStringConverter", 0 };
-    for (int i = 0; suppressedHolders[i] != 0; ++i) {
-        if (meta_class->qualifiedCppName() == QLatin1String(suppressedHolders[i]))
-            return false;
-    }
     return true;
 }
 
@@ -415,8 +404,21 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                 if (declaredName.startsWith(QLatin1String("const ")))
                     declaredName.remove(0, 6);
             }
-            if (typeName == QLatin1String("const char*")) {
-                // A JS string cannot go through qscriptvalue_cast<const char*>
+            // Qt 6: QAnyStringView/QStringView are non-owning views with no
+            // script metatype converter; qscriptvalue_cast yields a null
+            // view. Convert through an owning QString local (script strings
+            // and QByteArrays both arrive via toString()); the view borrows
+            // from the local for the duration of the native call, which
+            // copies what it needs (same pattern as const char* above).
+            if (typeName == QLatin1String("QAnyStringView")
+                || typeName == QLatin1String("QStringView")) {
+                stream << indentStr << "QString " << actualOut << "_str = " << actualIn << ".toString();" << endl;
+                stream << indentStr << typeName << " " << actualOut << "(" << actualOut << "_str);" << endl;
+                if (!fun->argumentRemoved(j+1))
+                    ++scriptArgIndex;
+                continue;
+            }
+            if (typeName == QLatin1String("const char*")) {                // A JS string cannot go through qscriptvalue_cast<const char*>
                 // (the cast yields a null pointer at runtime, and the pointed-to
                 // data would not outlive the call anyway). Keep the QByteArray
                 // alive in a local, mirroring the typesystem template
@@ -629,11 +631,31 @@ static void writeFunctionCallAndReturn(QTextStream &stream, const AbstractMetaFu
             stream << fun->originalName() << "(";
             stream << "*_q_self, ";
         } else {
-            stream << "_q_self->";
+            // Qt 6: overload-shadowing repair (see
+            // findPrototypeAndStaticFunctions): functions pulled from a base
+            // class into a shadowing derived table are called through the
+            // implementing scope so C++ name lookup finds them (an
+            // unqualified call would resolve against the derived static type,
+            // where the overload may be hidden or less visible, e.g.
+            // QTemporaryFile's protected open() hiding QFile::open).
+            // A qualified _q_self->Base::fn() call would bypass VIRTUAL
+            // dispatch (QIODevice::open vacuously "succeeds" without opening
+            // the file), so cast the object instead: virtual dispatch is
+            // preserved while lookup happens in the base scope.
+            if (fun->implementingClass() != 0 && fun->implementingClass() != meta_class)
+                stream << "static_cast<" << fun->implementingClass()->qualifiedCppName()
+                       << "*>(_q_self)->";
+            else
+                stream << "_q_self->";
             stream << fun->originalName() << "(";
         }
     } else {
-        stream << meta_class->qualifiedCppName() << "::";
+        // Qt 6: same shadowing repair for statics (no virtual dispatch for
+        // statics, so scope qualification is exact here).
+        if (fun->implementingClass() != 0 && fun->implementingClass() != meta_class)
+            stream << fun->implementingClass()->qualifiedCppName() << "::";
+        else
+            stream << meta_class->qualifiedCppName() << "::";
         stream << fun->originalName() << "(";
     }
     writeArguments(stream, nativeArgc);
@@ -971,7 +993,20 @@ static void writeEnumClass(QTextStream &stream, const AbstractMetaClass *meta_cl
            << qtScriptEnumName
            << "(QScriptContext *context, QScriptEngine *engine)" << endl;
     stream << "{" << endl;
-    stream << "    int arg = context->argument(0).toInt32();" << endl;
+    // Qt 6: toInt32() coerces anything (e.g. "UTF-8" becomes 0, i.e. the
+    // first enumerator) instead of rejecting it. Accept only real numbers
+    // and exactly-typed enum variants; anything else throws instead of
+    // silently mapping to an unrelated enumerator.
+    stream << "    const QScriptValue _q_arg = context->argument(0);" << endl;
+    stream << "    int arg = 0;" << endl;
+    stream << "    if (_q_arg.isNumber())" << endl;
+    stream << "        arg = _q_arg.toInt32();" << endl;
+    stream << "    else if (_q_arg.isVariant()" << endl
+           << "             && _q_arg.toVariant().userType() == qMetaTypeId<" << qualifiedEnumName << ">())" << endl;
+    stream << "        arg = static_cast<int>(qvariant_cast<" << qualifiedEnumName << ">(_q_arg.toVariant()));" << endl;
+    stream << "    else" << endl;
+    stream << "        return context->throwError(QString::fromLatin1(\""
+           << enom->name() << "(): invalid enum value\"));" << endl;
     if (enom->hasQEnumsDeclaration() && (meta_class->qualifiedCppName() != "QTransform")) {
         stream << "    const QMetaObject *meta = qtscript_" << meta_class->name() << "_metaObject();" << endl;
         stream << "    int idx = meta->indexOfEnumerator(\"" << enom->name() << "\");" << endl;
@@ -1657,6 +1692,58 @@ void findPrototypeAndStaticFunctions(
             func->isStatic() ? nameToStaticFunctions : nameToPrototypeFunctions;
         map[func->modifiedName()].append(func);
     }
+
+    // Qt 6: overload-shadowing repair. The loop above keeps only functions
+    // first-declared in this class, but when the class declares ANY overload
+    // of a base-class function name (e.g. QFile::open(OpenMode, Permissions)
+    // alongside the inherited QIODevice::open(OpenMode)), the derived
+    // prototype property shadows the base one in JS and the hidden base
+    // overloads become unreachable. Pull same-named base overloads with
+    // different signatures into this class's tables so dispatch still finds
+    // them; the native call virtual-dispatches to the right override.
+    // (Exact-signature overrides already resolve declaringClass to the base
+    // and are reached through the prototype chain when unshadowed.)
+    {
+        QSet<QString> protoSigs;
+        QSet<QString> staticSigs;
+        foreach (const QString &n, nameToPrototypeFunctions.keys()) {
+            foreach (const AbstractMetaFunction *f, nameToPrototypeFunctions.value(n))
+                protoSigs.insert(n + f->signature());
+        }
+        foreach (const QString &n, nameToStaticFunctions.keys()) {
+            foreach (const AbstractMetaFunction *f, nameToStaticFunctions.value(n))
+                staticSigs.insert(n + f->signature());
+        }
+        for (const AbstractMetaClass *base = meta_class->baseClass();
+             base != 0; base = base->baseClass()) {
+            AbstractMetaFunctionList baseFunctions = base->functionsInTargetLang();
+            for (int i = 0; i < baseFunctions.size(); ++i) {
+                AbstractMetaFunction *func = baseFunctions.at(i);
+                if (!func->isNormal())
+                    continue;
+#ifdef GENERATOR_NO_PROTECTED_FUNCTIONS
+                if (func->wasProtected())
+                    continue;
+#endif
+                if (func->isConstructor() || func->isDestructor())
+                    continue;
+                if (func->isSlot() || func->isSignal() || func->isInvokable())
+                    continue;
+                QMap<QString, AbstractMetaFunctionList> &map =
+                    func->isStatic() ? nameToStaticFunctions : nameToPrototypeFunctions;
+                QSet<QString> &sigs =
+                    func->isStatic() ? staticSigs : protoSigs;
+                const QString &key = func->modifiedName();
+                if (!map.contains(key))
+                    continue; // unshadowed: reached through the prototype chain
+                QString id = key + func->signature();
+                if (sigs.contains(id))
+                    continue; // same signature already present
+                sigs.insert(id);
+                map[key].append(func);
+            }
+        }
+    }
 }
 
 static void writeFunctionSignaturesString(QTextStream &s, const AbstractMetaFunctionList &functions)
@@ -2088,23 +2175,6 @@ void ClassGenerator::write(QTextStream &stream, const AbstractMetaClass *meta_cl
     writeInjectedCode(stream, meta_class, CodeSnip::End);
 
     QString packName = meta_class->package().replace(".", "_");
-    // Qt 6: suppressed holders (see shouldGenerate) resolve signatures and
-    // own their enums, but their class file -- and therefore their .pri and
-    // init entries -- must not emit. The hand-written oracle file takes the
-    // class slot instead; enums still resolve because the holder meta class
-    // exists in the model either way.
-    {
-        static const char *suppressedHolders[] = { "QStringConverter", 0 };
-        bool suppressed = false;
-        for (int i = 0; suppressedHolders[i] != 0; ++i) {
-            if (meta_class->qualifiedCppName() == QLatin1String(suppressedHolders[i])) {
-                suppressed = true;
-                break;
-            }
-        }
-        if (suppressed)
-            return;
-    }
     priGenerator->addSource(packName, fileNameForClass(meta_class));
     setupGenerator->addClass(meta_class);
 }

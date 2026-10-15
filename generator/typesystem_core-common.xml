@@ -512,6 +512,11 @@
   <enum-type name="QLocale::Script"/>
   <enum-type name="QLocale::NumberOption" flags="QLocale::NumberOptions"/>
   <enum-type name="QLocale::MeasurementSystem" />
+  <!-- Qt 6: scoped enum (enum class : char) used by name()/bcp47Name()/
+       uiLanguages() defaults; without it those functions are dropped -->
+  <enum-type name="QLocale::TagSeparator"/>
+  <!-- Qt 6: flags enum for the languageToCode/codeToLanguage overloads -->
+  <enum-type name="QLocale::LanguageCodeType" flags="QLocale::LanguageCodeTypes"/>
   <enum-type name="QMutex::RecursionMode"/>
   <enum-type name="QProcess::ExitStatus"/>
   <enum-type name="QProcess::ProcessChannel"/>
@@ -686,6 +691,24 @@
 
     <modify-function signature="setYMD(int, int, int)" remove="all"/>
     <!--### Obsolete in 4.3-->
+
+    <!-- Qt 6: QDate no longer declares operator== (C++20 comparesEqual/
+         spaceship instead), so the generator's setupEquals finds nothing and
+         no equals() binds. Inject it: C++ == is valid via <=>. -->
+    <inject-code class="native" position="prototype-initialization">
+    {
+        QScriptValue equalsFun = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QDate *self = qscriptvalue_cast&lt;QDate*&gt;(ctx-&gt;thisObject());
+                QDate *other = qscriptvalue_cast&lt;QDate*&gt;(ctx-&gt;argument(0));
+                if (!self || !other)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QDate.equals(): expected a QDate"));
+                return QScriptValue(eng, *self == *other);
+            }, 1);
+        proto.setProperty(QString::fromLatin1("equals"), equalsFun, QScriptValue::SkipInEnumeration);
+    }
+    </inject-code>
   </value-type>
 
   <value-type name="QDateTime">
@@ -810,6 +833,20 @@
 
   <value-type name="QTime"/>
 
+  <!-- Qt 6: QTimeZone (IANA/fixed-offset zones, QDateTime integration) had
+       no entry; the smoke suite needs construction, utc(), offsets.
+       The (QByteArray) ctor is the IANA-ID path; accept script strings. -->
+  <value-type name="QTimeZone">
+    <modify-function signature="QTimeZone(QByteArray)">
+      <modify-argument index="1">
+        <replace-type modified-type="QString"/>
+        <conversion-rule class="native">
+        QByteArray %out% = %in%.toString().toLatin1();
+        </conversion-rule>
+      </modify-argument>
+    </modify-function>
+  </value-type>
+
   <value-type name="QPersistentModelIndex">
     <modify-function signature="operator=(QPersistentModelIndex)" remove="all"/>
     <modify-function signature="operator=(QModelIndex)" remove="all"/>
@@ -846,21 +883,31 @@
   <rejection class="QTextCodecFactoryInterface"/>
   <rejection class="QTextCodecPlugin"/>
 
-  <!-- Qt 6: the oracle's QStringConverter binding is a hand-written
-       namespace object (create function + Encoding enum helpers only, with a
-       static_assert pinning the encoding list). The generator's class output
-       cannot emit that shape. BOTH entries below resolve signatures; neither
-       may suppress the other. generate="no" is therefore NOT used here (it
-       would mark GenerateForSubclass and, worse, enum entries inherit the
-       file-level generation flag which findType() then skips). Instead the
-       class file is kept out of the build by OMITTING it from emission (see
-       ClassGenerator::shouldGenerate note for suppressed holders): the
-       object-type entry stays for resolution while the .pri/init emission
-       skips QStringConverter explicitly.
-       NOTE: the entry must stay an object-type (not a rejection): the enum
-       attaches to the holder meta class, and translateType resolves the
-       Encoding return/argument through it. -->
-  <object-type name="QStringConverter"/>
+  <!-- Qt 6: QStringConverter is a plain class holding the Encoding enum.
+        The generated class file emits normally: it carries the Encoding enum
+        binding plus the metatype registration that QTextStream.encoding()
+        returns and setEncoding() enum-variant arguments rely on (the smoke
+        suite requires QStringConverter.Utf8 etc. with valueOf round trips).
+        BOTH entries below resolve signatures; neither may suppress the other.
+        generate="no" is therefore NOT used here (it would mark
+        GenerateForSubclass and, worse, enum entries inherit the file-level
+        generation flag which findType() then skips).
+        NOTE: the entry must stay an object-type (not a rejection): the enum
+        attaches to the holder meta class, and translateType resolves the
+        Encoding return/argument through it. (The bindings repo also keeps a
+        hand-written QStringConverter namespace object; the bindings .pri
+        picks one of the two files for that class slot at integration time.)
+        Instance surface: protected dtor, deleted copy; the shell cannot
+        compile against those and script needs no instances, so remove the
+        instance ctors/dtor/copy ops; statics + Encoding enum still bind. -->
+  <object-type name="QStringConverter">
+    <modify-function signature="~QStringConverter()" remove="all"/>
+    <modify-function signature="QStringConverter()" remove="all"/>
+    <modify-function signature="QStringConverter(const QStringConverter&amp;)" remove="all"/>
+    <modify-function signature="QStringConverter(QStringConverter&amp;&amp;)" remove="all"/>
+    <modify-function signature="operator=(const QStringConverter&amp;)" remove="all"/>
+    <modify-function signature="operator=(QStringConverter&amp;&amp;)" remove="all"/>
+  </object-type>
   <enum-type name="QStringConverter::Encoding"/>
 
   <value-type name="QBitArray">

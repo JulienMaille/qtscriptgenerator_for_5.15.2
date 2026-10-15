@@ -836,20 +836,20 @@
       <modify-argument index="1">
         <replace-type modified-type="QStringConverter::Encoding"/>
         <conversion-rule class="native">
-        const QScriptValue %in%_value = %in%;
-        const QVariant %in%_variant = %in%_value.isVariant() ? %in%_value.toVariant() : QVariant();
-        if (!%in%_value.isNumber() &amp;&amp; %in%_variant.userType() != qMetaTypeId&lt;QStringConverter::Encoding&gt;())
+        const QScriptValue encoding_value = %in%;
+        const QVariant encoding_variant = encoding_value.isVariant() ? encoding_value.toVariant() : QVariant();
+        if (!encoding_value.isNumber() &amp;&amp; encoding_variant.userType() != qMetaTypeId&lt;QStringConverter::Encoding&gt;())
             return context-&gt;throwError(QScriptContext::TypeError,
-                                       QString::fromLatin1("%CLASS_NAME%.%FUNCTION_NAME%(): expected QStringConverter.Encoding"));
-        const double %in%_numeric = %in%_value.isNumber() ? %in%_value.toNumber()
-            : static_cast&lt;int&gt;(%in%_variant.value&lt;QStringConverter::Encoding&gt;());
-        if (!(0 &lt;= %in%_numeric &amp;&amp; %in%_numeric &lt;= static_cast&lt;int&gt;(QStringConverter::LastEncoding))
-            || %in%_numeric != static_cast&lt;int&gt;(%in%_numeric))
+                                       QString::fromLatin1("QTextStream.setEncoding(): expected QStringConverter.Encoding"));
+        const double encoding_numeric = encoding_value.isNumber() ? encoding_value.toNumber()
+            : static_cast&lt;int&gt;(encoding_variant.value&lt;QStringConverter::Encoding&gt;());
+        if (!(0 &lt;= encoding_numeric &amp;&amp; encoding_numeric &lt;= static_cast&lt;int&gt;(QStringConverter::LastEncoding))
+            || encoding_numeric != static_cast&lt;int&gt;(encoding_numeric))
             return context-&gt;throwError(QScriptContext::RangeError,
-                                       QString::fromLatin1("%CLASS_NAME%.%FUNCTION_NAME%(): invalid encoding"));
-        QStringConverter::Encoding %out% = %in%_value.isNumber()
-            ? static_cast&lt;QStringConverter::Encoding&gt;(static_cast&lt;int&gt;(%in%_numeric))
-            : %in%_variant.value&lt;QStringConverter::Encoding&gt;();
+                                       QString::fromLatin1("QTextStream.setEncoding(): invalid encoding"));
+        QStringConverter::Encoding %out% = encoding_value.isNumber()
+            ? static_cast&lt;QStringConverter::Encoding&gt;(static_cast&lt;int&gt;(encoding_numeric))
+            : encoding_variant.value&lt;QStringConverter::Encoding&gt;();
         </conversion-rule>
       </modify-argument>
     </modify-function>
