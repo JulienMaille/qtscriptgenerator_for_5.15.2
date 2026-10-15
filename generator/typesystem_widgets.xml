@@ -203,6 +203,9 @@
        flags fallback. -->
   <enum-type name="QMessageBox::Option" flags="QMessageBox::Options"/>
   <enum-type name="QProgressBar::Direction"/>
+  <!-- Qt 6.7: QRhiWidget's scoped enums need entries to attach. -->
+  <enum-type name="QRhiWidget::Api"/>
+  <enum-type name="QRhiWidget::TextureFormat"/>
   <enum-type name="QRubberBand::Shape"/>
   <enum-type name="QSizePolicy::Policy"/>
   <enum-type name="QSizePolicy::PolicyFlag"/>
@@ -3170,6 +3173,22 @@
     <modify-function signature="setGeometry(const QRect &amp;)" rename="setRubberBandGeometry"/>
   </object-type>
 
+  <!-- Qt 6.7: hardware-rendered widget. The QRhi* render types have no
+       bindings; the virtuals and getters touching them are dropped so the
+       widget shell, the Api/TextureFormat enums and the plain out-of-render
+       API (debug layer, sample count, sizes) bind. -->
+  <object-type name="QRhiWidget">
+    <modify-function signature="initialize(QRhiCommandBuffer*)" remove="all"/>
+    <modify-function signature="render(QRhiCommandBuffer*)" remove="all"/>
+    <modify-function signature="rhi()const" remove="all"/>
+    <modify-function signature="colorTexture()const" remove="all"/>
+    <modify-function signature="msaaColorBuffer()const" remove="all"/>
+    <modify-function signature="resolveTexture()const" remove="all"/>
+    <modify-function signature="depthStencilBuffer()const" remove="all"/>
+    <modify-function signature="renderTarget()const" remove="all"/>
+    <modify-function signature="grabFramebuffer()const" remove="all"/>
+  </object-type>
+
   <object-type name="QTableWidget">
     <modify-function signature="mimeData(const QList&lt;QTableWidgetItem*&gt;)const">
         <modify-argument index="1" invalidate-after-use="yes"/>
@@ -3627,6 +3646,14 @@
 
   <object-type name="QMouseEventTransition"/>
   <object-type name="QKeyEventTransition"/>
+
+  <!-- Qt 6.4 added clearButtonEnabled; Qt 6.5 added maximumSequenceLength.
+       The QKeyCombination list property has no sequence binding, so it is
+       left out rather than blocking the class. -->
+  <object-type name="QKeySequenceEdit">
+    <modify-function signature="finishingKeyCombinations()const" remove="all"/>
+    <modify-function signature="setFinishingKeyCombinations(QList&lt;QKeyCombination&gt;)" remove="all"/>
+  </object-type>
 
   <object-type name="QCommandLinkButton"/>
   <object-type name="QFileSystemModel">
