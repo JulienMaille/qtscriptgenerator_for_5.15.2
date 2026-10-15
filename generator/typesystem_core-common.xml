@@ -470,6 +470,15 @@
     </inject-code>
   </namespace-type>
 
+  <!-- Qt 6: QRegularExpression replaces QRegExp as the regex argument type
+       (e.g. QTextDocument::find). The type must resolve for those overloads
+       to bind, but it is not generated as a class: the script surface stays
+       QRegExp, and the find arguments are replaced below so the call can
+       convert through qtscriptRegularExpression. -->
+  <value-type name="QRegularExpression" generate="no">
+    <include file-name="QRegularExpression" location="global"/>
+  </value-type>
+
   <enum-type name="QDate::MonthNameType" />
   <enum-type name="QAbstractAnimation::DeletionPolicy" />
   <enum-type name="QAbstractAnimation::Direction" />

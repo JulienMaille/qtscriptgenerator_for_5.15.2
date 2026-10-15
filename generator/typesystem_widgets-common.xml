@@ -3305,6 +3305,12 @@
             <reference-count action="ignore"/>
         </modify-argument>
     </modify-function>
+    <!-- Qt 6 find() takes QRegularExpression; keep the Qt 5 QRegExp surface. -->
+    <modify-function signature="find(QRegularExpression,QFlags&lt;QTextDocument::FindFlag&gt;)">
+        <modify-argument index="1">
+            <replace-type modified-type="QRegExp"/>
+        </modify-argument>
+    </modify-function>
   </object-type>
 
   <object-type name="QAction">
@@ -3644,6 +3650,12 @@
     <modify-function signature="insertFromMimeData(const QMimeData*)">
         <modify-argument index="1">
             <reference-count action="ignore" />
+        </modify-argument>
+    </modify-function>
+    <!-- Qt 6 find() takes QRegularExpression; keep the Qt 5 QRegExp surface. -->
+    <modify-function signature="find(QRegularExpression,QFlags&lt;QTextDocument::FindFlag&gt;)">
+        <modify-argument index="1">
+            <replace-type modified-type="QRegExp"/>
         </modify-argument>
     </modify-function>
   </object-type>

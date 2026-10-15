@@ -1333,6 +1333,19 @@
     <modify-function signature="undo(QTextCursor*)">
         <access modifier="private"/>
     </modify-function>
+    <!-- Qt 6 find() takes QRegularExpression; keep the Qt 5 QRegExp script
+         surface. The argument is scripted as QRegExp and converted back to
+         QRegularExpression at the native call (see classgenerator). -->
+    <modify-function signature="find(QRegularExpression,int,QFlags&lt;QTextDocument::FindFlag&gt;)const">
+        <modify-argument index="1">
+            <replace-type modified-type="QRegExp"/>
+        </modify-argument>
+    </modify-function>
+    <modify-function signature="find(QRegularExpression,QTextCursor,QFlags&lt;QTextDocument::FindFlag&gt;)const">
+        <modify-argument index="1">
+            <replace-type modified-type="QRegExp"/>
+        </modify-argument>
+    </modify-function>
   </object-type>
 
   <object-type name="QTextDocumentWriter">
