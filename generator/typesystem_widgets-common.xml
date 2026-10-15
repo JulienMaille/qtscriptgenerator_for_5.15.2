@@ -62,19 +62,21 @@
   <enum-type name="QFontDialog::FontDialogOption" flags="QFontDialog::FontDialogOptions" />
   <enum-type name="QColorDialog::ColorDialogOption" flags="QColorDialog::ColorDialogOptions" />
   <enum-type name="QAbstractItemDelegate::EndEditHint"/>
-  <enum-type name="QAbstractItemView::CursorAction"/>
+  <!-- Qt 6: these enums are protected in the C++ class, so the generated
+       binding cannot name them. Reject them instead of exporting them. -->
+  <rejection class="QAbstractItemView" enum-name="CursorAction"/>
   <enum-type name="QAbstractItemView::DragDropMode"/>
-  <enum-type name="QAbstractItemView::DropIndicatorPosition"/>
+  <rejection class="QAbstractItemView" enum-name="DropIndicatorPosition"/>
   <enum-type name="QAbstractItemView::EditTrigger" flags="QAbstractItemView::EditTriggers"/>
   <enum-type name="QAbstractItemView::ScrollHint"/>
   <enum-type name="QAbstractItemView::ScrollMode"/>
   <enum-type name="QAbstractItemView::SelectionBehavior"/>
   <enum-type name="QAbstractItemView::SelectionMode"/>
-  <enum-type name="QAbstractItemView::State"/>
+  <rejection class="QAbstractItemView" enum-name="State"/>
   <enum-type name="QAbstractPrintDialog::PrintDialogOption" flags="QAbstractPrintDialog::PrintDialogOptions"/>
   <enum-type name="QAbstractPrintDialog::PrintRange"/>
   <enum-type name="QAbstractSlider::SliderAction"/>
-  <enum-type name="QAbstractSlider::SliderChange"/>
+  <rejection class="QAbstractSlider" enum-name="SliderChange"/>
   <enum-type name="QAbstractSpinBox::ButtonSymbols"/>
   <enum-type name="QAbstractSpinBox::CorrectionMode"/>
   <enum-type name="QAbstractSpinBox::StepEnabledFlag" flags="QAbstractSpinBox::StepEnabled"/>
@@ -125,7 +127,7 @@
   <enum-type name="QFrame::Shape"/>
   <enum-type name="QFrame::StyleMask"/>
   <enum-type name="QGraphicsEllipseItem::enum_1"/>
-  <enum-type name="QGraphicsItem::Extension"/>
+  <rejection class="QGraphicsItem" enum-name="Extension"/>
   <enum-type name="QGraphicsItem::GraphicsItemChange"/>
   <enum-type name="QGraphicsItem::GraphicsItemFlag" flags="QGraphicsItem::GraphicsItemFlags"/>
   <enum-type name="QGraphicsItem::enum_1"/>
@@ -161,6 +163,10 @@
   <enum-type name="QMainWindow::DockOption" flags="QMainWindow::DockOptions"/>
   <enum-type name="QMessageBox::ButtonRole"/>
   <enum-type name="QMessageBox::Icon"/>
+  <!-- Qt 6: declare the option enum so QMessageBox::Options resolves here
+       instead of colliding with QFileDialog::Option through the short-name
+       flags fallback. -->
+  <enum-type name="QMessageBox::Option" flags="QMessageBox::Options"/>
   <enum-type name="QProgressBar::Direction"/>
   <enum-type name="QRubberBand::Shape"/>
   <enum-type name="QSizePolicy::Policy"/>
@@ -1144,7 +1150,11 @@
         </modify-argument>
     </modify-function>
   </object-type>
-  <object-type name="QToolTip"/>
+  <object-type name="QToolTip">
+    <!-- Qt 6 deleted the default constructor; drop the synthesized one so no
+         shell instance is created. -->
+    <modify-function signature="QToolTip()" remove="all"/>
+  </object-type>
   <object-type name="QTreeView">
 
     <modify-function signature="drawBranches(QPainter*,QRect,QModelIndex)const">
@@ -1221,7 +1231,11 @@
     </modify-function>
   </object-type>
   <object-type name="QVBoxLayout"/>
-  <object-type name="QWhatsThis"/>
+  <object-type name="QWhatsThis">
+    <!-- Qt 6 deleted the default constructor; drop the synthesized one so no
+         shell instance is created. -->
+    <modify-function signature="QWhatsThis()" remove="all"/>
+  </object-type>
   <object-type name="QWidgetAction">
     <modify-function signature="createWidget(QWidget*)">
         <modify-argument index="return">
