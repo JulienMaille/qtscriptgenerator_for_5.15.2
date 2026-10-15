@@ -1,5 +1,5 @@
-<?xml version="1.0"?>
-<typesystem package="com.trolltech.qt.network"><load-typesystem name="typesystem_core.xml" generate="no"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QUrlInfo' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QAuthenticator' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslKey' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslError' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslCertificate' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslCipher' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslConfiguration' has equals operators but no qHash() function"/>
+<?xml version='1.0' encoding='UTF-8'?>
+<typesystem package="com.trolltech.qt.network"><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QUrlInfo' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QAuthenticator' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslKey' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslError' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslCertificate' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslCipher' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QSslConfiguration' has equals operators but no qHash() function"/><suppress-warning text="WARNING(MetaJavaBuilder) :: signature '*' for function modification in '*' not found. Possible candidates: "/>
   <namespace-type name="QSsl">
     <include file-name="qssl.h" location="global"/>
   </namespace-type>
@@ -8,15 +8,16 @@
   <enum-type name="QAbstractSocket::NetworkLayerProtocol"/>
   <enum-type name="QNetworkProxyQuery::QueryType"/>
   <enum-type name="QAbstractSocket::SocketError"/>
-  <enum-type name="QAbstractSocket::BindFlag"/>
-  <enum-type name="QAbstractSocket::PauseMode"/>
+  <!-- Qt 6: BindFlag/BindMode moved from QUdpSocket to QAbstractSocket -->
+  <enum-type name="QAbstractSocket::BindFlag" flags="QAbstractSocket::BindMode"/>
+  <enum-type name="QAbstractSocket::PauseMode" flags="QAbstractSocket::PauseModes"/>
   <enum-type name="QAbstractSocket::SocketState"/>
   <enum-type name="QAbstractSocket::SocketType"/>
   <enum-type name="QAbstractSocket::SocketOption"/>
   <enum-type name="QHostAddress::SpecialAddress"/>
   <enum-type name="QNetworkInterface::InterfaceFlag" flags="QNetworkInterface::InterfaceFlags"/>
   <enum-type name="QNetworkProxy::ProxyType"/>
-  <enum-type name="QUdpSocket::BindFlag" flags="QUdpSocket::BindMode"/>
+  <!-- Qt 6: removed (moved to QAbstractSocket::BindFlag/BindMode) -->
   <enum-type name="QUrlInfo::PermissionSpec"/>
   <enum-type name="QHostInfo::HostInfoError"/>
   <enum-type name="QSsl::KeyType"/>
@@ -29,6 +30,10 @@
   <enum-type name="QNetworkAccessManager::NetworkAccessibility"/>
   <enum-type name="QNetworkAccessManager::Operation"/>
   <enum-type name="QNetworkCookie::RawForm"/>
+  <!-- Qt 6: scoped SameSite enum for sameSitePolicy(); QByteArrayView
+       resolves signatures (emitter converts via owning QString locals) -->
+  <enum-type name="QNetworkCookie::SameSite"/>
+  <value-type name="QByteArrayView" generate="no"/>
   <enum-type name="QNetworkReply::NetworkError"/>
   <enum-type name="QNetworkRequest::Attribute" extensible="yes"/>
   <enum-type name="QNetworkRequest::CacheLoadControl"/>
@@ -111,6 +116,12 @@
     <modify-function signature="operator=(QHostAddress)" remove="all"/>
   </value-type>
 
+  <!-- Qt 6: QHostAddress::NetworkLayerProtocol is a using-alias for
+       QAbstractSocket::NetworkLayerProtocol. The alias itself binds to the
+       real enum entry (values land on QHostAddress too), so protocol() and
+       the IPv4Protocol-style constants resolve through it. -->
+  <enum-type name="QHostAddress::NetworkLayerProtocol"/>
+
   <value-type name="QHostInfo">
         <modify-function signature="operator=(QHostInfo)" remove="all"/>
         <modify-function signature="lookupHost(QString,QObject*,const char*)" access="private"/>
@@ -162,6 +173,20 @@
   </value-type>
   <value-type name="QNetworkRequest">
     <modify-function signature="operator=(QNetworkRequest)" remove="all"/>
+    <!-- Qt 6.7 removed the QByteArray overloads of hasRawHeader/rawHeader;
+         only the QAnyStringView forms remain. Bind them via QString (which
+         implicitly converts to QAnyStringView); script strings and QByteArray
+         arguments both arrive through toString(). -->
+    <modify-function signature="hasRawHeader(QAnyStringView)const">
+      <modify-argument index="1">
+        <replace-type modified-type="QString"/>
+      </modify-argument>
+    </modify-function>
+    <modify-function signature="rawHeader(QAnyStringView)const">
+      <modify-argument index="1">
+        <replace-type modified-type="QString"/>
+      </modify-argument>
+    </modify-function>
   </value-type>
 
   <enum-type name="QSslError::SslError"/>
@@ -179,7 +204,19 @@
   </value-type>
   <value-type name="QSslConfiguration"/>
 
-  <object-type name="QSslSocket"/>
+  <object-type name="QSslSocket">
+    <inject-code class="native" position="constructor-initialization">
+    {
+        QScriptValue supportedCiphersFun = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                (void) ctx;
+                QList&lt;QSslCipher&gt; ciphers = QSslConfiguration::supportedCiphers();
+                return qScriptValueFromSequence(eng, ciphers);
+            }, 0);
+        ctor.setProperty(QString::fromLatin1("supportedCiphers"), supportedCiphersFun, QScriptValue::SkipInEnumeration);
+    }
+    </inject-code>
+  </object-type>
 
   <suppress-warning text="*unmatched parameter type 'sockaddr const*"/>
 

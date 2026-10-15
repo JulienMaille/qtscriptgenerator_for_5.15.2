@@ -418,6 +418,16 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                     ++scriptArgIndex;
                 continue;
             }
+            // Qt 6: QByteArrayView likewise borrows without a script
+            // converter; keep an owning QByteArray local (toLatin1 preserves
+            // the byte content for both string and QByteArray arguments).
+            if (typeName == QLatin1String("QByteArrayView")) {
+                stream << indentStr << "QByteArray " << actualOut << "_ba = " << actualIn << ".toString().toLatin1();" << endl;
+                stream << indentStr << typeName << " " << actualOut << "(" << actualOut << "_ba);" << endl;
+                if (!fun->argumentRemoved(j+1))
+                    ++scriptArgIndex;
+                continue;
+            }
             if (typeName == QLatin1String("const char*")) {                // A JS string cannot go through qscriptvalue_cast<const char*>
                 // (the cast yields a null pointer at runtime, and the pointed-to
                 // data would not outlive the call anyway). Keep the QByteArray
@@ -429,7 +439,6 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                     ++scriptArgIndex;
                 continue;
             }
-            stream << indentStr << (declaredName.isEmpty() ? typeName : declaredName) << " " << actualOut;
             QString converter;
             // Qt 6: narrowing script-number conversions (quint16 local <-
             // toUInt32 etc.) need a static_cast; the raw conversion yields
@@ -441,6 +450,42 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                 narrowTarget = declaredName;
             // ### generalize the QSet check (we should check if the type has push_back())
             bool useToSequence = argType && isSequenceType(argType) && !argType->name().startsWith("Set");
+            // Qt 6: mutable value-type references (e.g. swap(QNetworkRequest&))
+            // must alias the script object, not a copy: cast to pointer,
+            // throw TypeError on null (mirrors the oracle), and bind a C++
+            // reference local so the native call mutates through. Only for
+            // value types; const-refs keep copy semantics (temporaries must
+            // bind), QObject/primitive/enum/sequence paths are untouched.
+            // NOTE: this block emits NOTHING yet -- it only decides; the
+            // actual emission happens below (mutableRefTarget non-empty).
+            QString mutableRefTarget;
+            if (!useToSequence && argType && argType->isReference() && !argType->isConstant()
+                && argType->typeEntry() && argType->typeEntry()->isValue()) {
+                mutableRefTarget = declaredName.isEmpty() ? typeName : declaredName;
+                if (mutableRefTarget.endsWith(QLatin1Char('&')))
+                    mutableRefTarget.chop(1);
+                mutableRefTarget = mutableRefTarget.trimmed();
+            }
+            if (!mutableRefTarget.isEmpty()) {
+                // Emission for the mutable-reference case decided above.
+                // The generic declaration line below must NOT emit (it would
+                // declare _q_argN twice); instead declare the pointer, null-
+                // check with TypeError, and bind the reference local.
+                stream << indentStr << mutableRefTarget << "* " << actualOut << "_ptr = "
+                       << "qscriptvalue_cast<" << mutableRefTarget << "*>(" << actualIn << ");" << endl;
+                QString clsName = (fun->implementingClass() != 0)
+                    ? fun->implementingClass()->name() : QLatin1String("?");
+                stream << indentStr << "if (!" << actualOut << "_ptr)" << endl;
+                stream << indentStr << "    return context->throwError(QScriptContext::TypeError," << endl;
+                stream << indentStr << "        QString::fromLatin1(\"" << clsName << "."
+                       << fun->modifiedName() << "(): argument " << (j + 1)
+                       << " must be a " << mutableRefTarget << "\"));" << endl;
+                stream << indentStr << mutableRefTarget << "& " << actualOut << " = *" << actualOut << "_ptr;" << endl;
+                if (!fun->argumentRemoved(j+1))
+                    ++scriptArgIndex;
+                continue;
+            }
+            stream << indentStr << (declaredName.isEmpty() ? typeName : declaredName) << " " << actualOut;
             if (useToSequence) {
                 stream << ";" << endl;
                 stream << indentStr << "qScriptValueToSequence(";
