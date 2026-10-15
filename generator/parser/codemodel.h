@@ -665,15 +665,22 @@ public:
   void addEnumerator(EnumeratorModelItem item);
   void removeEnumerator(EnumeratorModelItem item);
 
+  // Qt 6: C++11 scoped enum (enum class/struct). Value references need
+  // EnumName:: qualification when generating C++.
+  bool isScoped() const;
+  void setScoped(bool scoped);
+
 protected:
   _EnumModelItem(CodeModel *model, int kind = __node_kind)
     : _CodeModelItem(model, kind),
-      _M_accessPolicy(CodeModel::Public)
+      _M_accessPolicy(CodeModel::Public),
+      _M_scoped(false)
   {}
 
 private:
   CodeModel::AccessPolicy _M_accessPolicy;
   EnumeratorList _M_enumerators;
+  bool _M_scoped;
 
 private:
   _EnumModelItem(const _EnumModelItem &other);

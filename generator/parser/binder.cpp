@@ -279,7 +279,25 @@ void Binder::declare_symbol(SimpleDeclarationAST *node, InitDeclaratorAST *init_
       fun->setAccessPolicy(_M_current_access);
       fun->setFunctionType(_M_current_function_type);
       fun->setName(name_cc.name());
-      fun->setAbstract(init_declarator->initializer != 0);
+      // Qt 6: "= delete" functions must not enter the model at all (they
+      // cannot be called or overridden; e.g. Q_DISABLE_COPY_MOVE copy/move
+      // operations). "= default" functions are ordinary; only a real "= 0"
+      // makes a function abstract (the marker clause carries no expression;
+      // pool memory is zeroed via RXX_ALLOCATOR_INIT_0).
+      {
+          InitializerAST *initializer = init_declarator->initializer;
+          if (initializer != 0 && initializer->default_delete == 2)
+              return;
+          bool isAbstract = false;
+          if (initializer != 0) {
+              if (initializer->expression != 0)
+                  isAbstract = true;
+              else if (initializer->initializer_clause != 0
+                       && initializer->initializer_clause->expression != 0)
+                  isAbstract = true;
+          }
+          fun->setAbstract(isAbstract);
+      }
       fun->setConstant(declarator->fun_cv != 0);
       fun->setException(exceptionSpecToString(declarator->exception_spec));
 
@@ -727,6 +745,7 @@ void Binder::visitEnumSpecifier(EnumSpecifierAST *node)
 
   _M_current_enum = model()->create<EnumModelItem>();
   _M_current_enum->setAccessPolicy(_M_current_access);
+  _M_current_enum->setScoped(node->scoped);
   updateItemPosition (_M_current_enum->toItem(), node);
   _M_current_enum->setName(name);
   _M_current_enum->setScope(enumScope->qualifiedName());

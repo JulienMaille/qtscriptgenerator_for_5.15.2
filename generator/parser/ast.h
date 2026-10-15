@@ -416,6 +416,10 @@ struct EnumSpecifierAST: public TypeSpecifierAST
 
   NameAST *name;
   const ListNode<EnumeratorAST*> *enumerators;
+  // Qt 6: C++11 scoped enums (enum class/struct). The scope qualifier
+  // carries no script-side meaning, but C++ value references need the
+  // extra EnumName:: qualification when emitting.
+  bool scoped;
 };
 
 struct EnumeratorAST: public AST
@@ -508,6 +512,11 @@ struct InitializerAST: public AST
 
   InitializerClauseAST *initializer_clause;
   ExpressionAST *expression;
+  // Qt 6: C++11 "= default" / "= delete" marker (see
+  // Parser::parseInitializer). Pool memory is zeroed (RXX_ALLOCATOR_INIT_0),
+  // so ordinary initializers read 0 here without explicit initialization.
+  // 0 = ordinary initializer, 1 = "= default", 2 = "= delete".
+  int default_delete;
 };
 
 struct InitializerClauseAST: public AST

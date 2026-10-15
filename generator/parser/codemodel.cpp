@@ -758,6 +758,16 @@ void _EnumModelItem::setAccessPolicy(CodeModel::AccessPolicy accessPolicy)
   _M_accessPolicy = accessPolicy;
 }
 
+bool _EnumModelItem::isScoped() const
+{
+  return _M_scoped;
+}
+
+void _EnumModelItem::setScoped(bool scoped)
+{
+  _M_scoped = scoped;
+}
+
 EnumeratorList _EnumModelItem::enumerators() const
 {
   return _M_enumerators;

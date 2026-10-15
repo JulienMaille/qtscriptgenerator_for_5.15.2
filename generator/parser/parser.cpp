@@ -1445,6 +1445,18 @@ bool Parser::parseEnumSpecifier(TypeSpecifierAST *&node)
 
   CHECK(Token_enum);
 
+  // Qt 6: scoped enums (enum class X { ... } / enum struct X { ... }).
+  // The legacy grammar predates them; the scope qualifier carries no
+  // script-side meaning (enumerators bind the same way), so accept and
+  // record it (C++ value references need EnumName:: qualification) instead
+  // of dropping the whole declaration.
+  bool scoped_enum = false;
+  if (token_stream.lookAhead() == Token_class
+      || token_stream.lookAhead() == Token_struct) {
+    token_stream.nextToken();
+    scoped_enum = true;
+  }
+
   NameAST *name = 0;
   parseName(name);
 
@@ -1481,6 +1493,7 @@ bool Parser::parseEnumSpecifier(TypeSpecifierAST *&node)
 
   EnumSpecifierAST *ast = CreateNode<EnumSpecifierAST>(_M_pool);
   ast->name = name;
+  ast->scoped = scoped_enum;
 
   EnumeratorAST *enumerator = 0;
   if (parseEnumerator(enumerator))
@@ -1851,7 +1864,34 @@ bool Parser::parseParameterDeclaration(ParameterDeclarationAST *&node)
   if (token_stream.lookAhead() == '=')
     {
       token_stream.nextToken();
-      if (!parseLogicalOrExpression(expr,true))
+      // Qt 6: braced default arguments (= {} / = {...}, e.g. QList
+      // parameters defaulting to an empty list). The legacy expression
+      // grammar has no braced-init production; leaving the braces in place
+      // desyncs the parameter list (each following token fails member
+      // parsing and recovery eats the whole declaration, e.g. the
+      // QPointerEvent/QTouchEvent ctors). Consume the balanced group and
+      // record a marker expression spanning it so the parameter counts
+      // as defaulted; the builder translates "{}" to value construction.
+      // A StringLiteral node is used as the marker: its visitors are
+      // no-ops and only its token range is read (for the default text).
+      if (token_stream.lookAhead() == '{')
+        {
+          std::size_t braceStart = token_stream.cursor();
+          if (skip('{','}'))
+            {
+              token_stream.nextToken();
+              StringLiteralAST *marker = CreateNode<StringLiteralAST>(_M_pool);
+              marker->literals = 0;
+              UPDATE_POS(marker, braceStart, token_stream.cursor());
+              // Marker only: reinterpreted so it fits the expression field.
+              // Its kind stays StringLiteral (inert visitors); only the
+              // token range is ever read back (for the default text).
+              expr = reinterpret_cast<ExpressionAST *>(marker);
+            }
+          else
+            reportError(("'}' missing in braced default argument"));
+        }
+      else if (!parseLogicalOrExpression(expr,true))
         {
           //reportError(("Expression expected"));
         }
@@ -2376,6 +2416,19 @@ bool Parser::parseInitDeclarator(InitDeclaratorAST *&node)
   InitializerAST *init = 0;
   parseInitializer(init);
 
+  // Qt 6: braced variable initializers (Widget w{};, ... = T{...} is
+  // covered above). The legacy grammar only knows =()/() initializers; a
+  // trailing balanced brace group after a NON-FUNCTION declarator (no
+  // parameter clause, so this cannot be a function body) is an
+  // initializer, not a syntax error (e.g. QT_DEFINE_TAG variables).
+  // Without this the declaration fails and namespace-scope recovery eats
+  // whatever follows (e.g. every Qt namespace enum after the tag).
+  if (token_stream.lookAhead() == '{' && decl
+      && decl->parameter_declaration_clause == 0) {
+    if (skip('{','}'))
+      token_stream.nextToken();
+  }
+
   InitDeclaratorAST *ast = CreateNode<InitDeclaratorAST>(_M_pool);
   ast->declarator = decl;
   ast->initializer = init;
@@ -2443,6 +2496,7 @@ bool Parser::parseInitializer(InitializerAST *&node)
           token_stream.nextToken();
           InitializerClauseAST *clause = CreateNode<InitializerClauseAST>(_M_pool);
           ast->initializer_clause = clause;
+          ast->default_delete = (nextTk == Token_default) ? 1 : 2;
         }
       else if (!parseInitializerClause(ast->initializer_clause))
         {
@@ -3477,7 +3531,22 @@ bool Parser::parseDeclarationInternal(DeclarationAST *&node)
     }
 
   TypeSpecifierAST *spec = 0;
-  if (parseTypeSpecifier(spec))
+  // Qt 6: a leading function-specifier (inline/virtual/explicit, e.g. from
+  // QT_DEFINE_TAG expansions) defeats parseDeclaration's class-specifier
+  // fast path above, and parseTypeSpecifier prefers the body-less
+  // elaborated form, stranding a following '{...}' body and desyncing
+  // everything after it (e.g. all Qt namespace enums after the tag struct).
+  // When a class-key starts the specifier, parse the full definition first;
+  // pure elaborated uses (no body) fall through to parseTypeSpecifier.
+  bool parsedClassSpec = false;
+  if (token_stream.lookAhead() == Token_class
+      || token_stream.lookAhead() == Token_struct
+      || token_stream.lookAhead() == Token_union) {
+    parsedClassSpec = parseClassSpecifier(spec);
+    if (!parsedClassSpec)
+      token_stream.rewind((int) index);
+  }
+  if (!parsedClassSpec && parseTypeSpecifier(spec))
     {
       Q_ASSERT(spec != 0);
 
