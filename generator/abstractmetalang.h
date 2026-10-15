@@ -605,7 +605,7 @@ public:
 class AbstractMetaEnum : public AbstractMetaAttributes
 {
 public:
-    AbstractMetaEnum() : m_type_entry(0), m_class(0), m_has_qenums_declaration(false) {}
+    AbstractMetaEnum() : m_type_entry(0), m_class(0), m_has_qenums_declaration(false), m_scoped(false) {}
 
     AbstractMetaEnumValueList values() const { return m_enum_values; }
     void addEnumValue(AbstractMetaEnumValue *enumValue) { m_enum_values << enumValue; }
@@ -619,6 +619,11 @@ public:
     void setHasQEnumsDeclaration(bool on) { m_has_qenums_declaration = on; }
     bool hasQEnumsDeclaration() const { return m_has_qenums_declaration; }
 
+    // Qt 6: C++11 scoped enum (enum class/struct). C++ value references
+    // need the extra EnumName:: qualification.
+    void setScoped(bool on) { m_scoped = on; }
+    bool isScoped() const { return m_scoped; }
+
     EnumTypeEntry *typeEntry() const { return m_type_entry; }
     void setTypeEntry(EnumTypeEntry *entry) { m_type_entry = entry; }
 
@@ -631,7 +636,8 @@ private:
     AbstractMetaClass *m_class;
 
     uint m_has_qenums_declaration : 1;
-    uint m_reserved : 31;
+    uint m_scoped : 1;
+    uint m_reserved : 30;
 };
 
 typedef QList<AbstractMetaEnum *> AbstractMetaEnumList;
@@ -674,6 +680,7 @@ public:
           m_has_nonpublic(false),
           m_has_virtual_slots(false),
           m_has_nonprivateconstructor(false),
+          m_has_onlyprivateconstructors(false),
           m_functions_fixed(false),
           m_has_public_destructor(true),
           m_force_shell_class(false),
@@ -709,6 +716,11 @@ public:
 
     bool hasNonPrivateConstructor() const { return m_has_nonprivateconstructor; }
     void setHasNonPrivateConstructor(bool on) { m_has_nonprivateconstructor = on; }
+    // Qt 6: set when the class declares only private constructors (e.g.
+    // QClipboard). A synthesized public default would not compile against
+    // the private base ctors, so addDefaultConstructor must not run.
+    bool hasOnlyPrivateConstructors() const { return m_has_onlyprivateconstructors; }
+    void setHasOnlyPrivateConstructors(bool on) { m_has_onlyprivateconstructors = on; }
     bool hasPublicDestructor() const { return m_has_public_destructor; }
     void setHasPublicDestructor(bool on) { m_has_public_destructor = on; }
 
@@ -845,6 +857,7 @@ private:
     uint m_has_nonpublic : 1;
     uint m_has_virtual_slots : 1;
     uint m_has_nonprivateconstructor : 1;
+    uint m_has_onlyprivateconstructors : 1;
     uint m_functions_fixed : 1;
     uint m_has_public_destructor : 1;
     uint m_force_shell_class : 1;

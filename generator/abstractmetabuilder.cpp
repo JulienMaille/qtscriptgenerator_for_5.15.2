@@ -464,7 +464,10 @@ bool AbstractMetaBuilder::build()
             ReportHandler::warning(QString("class '%1' does not have an entry in the type system")
                                    .arg(cls->name()));
         } else {
-            if (!cls->hasConstructors() && !cls->isFinalInCpp() && !cls->isInterface() && !cls->isNamespace())
+            // Qt 6: skip synthesis for private-only construction (the
+            // synthesized public default would not compile).
+            if (!cls->hasConstructors() && !cls->isFinalInCpp() && !cls->isInterface() && !cls->isNamespace()
+                && !cls->hasOnlyPrivateConstructors())
                 cls->addDefaultConstructor();
         }
 
@@ -1033,6 +1036,7 @@ AbstractMetaEnum *AbstractMetaBuilder::traverseEnum(EnumModelItem enum_item, Abs
     }
 
     AbstractMetaEnum *meta_enum = createMetaEnum();
+    meta_enum->setScoped(enum_item->isScoped());
     if (   enumsDeclarations.contains(qualified_name)
         || enumsDeclarations.contains(enum_name)) {
         meta_enum->setHasQEnumsDeclaration(true);
@@ -1411,6 +1415,10 @@ void AbstractMetaBuilder::traverseFunctions(ScopeModelItem scope_item, AbstractM
             bool isInvalidDestructor = meta_function->isDestructor() && meta_function->isPrivate();
             bool isInvalidConstructor = meta_function->isConstructor()
                 && (meta_function->isPrivate() || meta_function->isInvalid());
+            // Qt 6: record private-only construction (e.g. QClipboard) so no
+            // public default is synthesized later (it would not compile).
+            if (meta_function->isConstructor() && meta_function->isPrivate())
+                meta_class->setHasOnlyPrivateConstructors(true);
             if ((isInvalidDestructor || isInvalidConstructor)
                 && !meta_class->hasNonPrivateConstructor()) {
                 *meta_class += AbstractMetaAttributes::Final;
@@ -1762,6 +1770,20 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
     if (function_item->isFriend())
         return 0;
 
+    // Qt 6: hidden friends (e.g. constexpr friend inline QVector2D
+    // operator+(QVector2D, QVector2D)) take the enclosing class as their
+    // first argument but bind as free functions, not members. The legacy
+    // binder loses the friend flag on such inline definitions, so detect
+    // the shape here: a non-static function whose FIRST argument has the
+    // same type as the enclosing class is really a hidden friend -- mark it
+    // Friendly so the emitter calls it as a free function (see
+    // writeFunctionCallAndReturn), matching Qt 5 behavior where these were
+    // skipped or bound correctly.
+    // NOTE: member binary operators (QPoint::operator+(QPoint)) share the
+    // shape; they are genuine members and must NOT match. Hidden friends
+    // declare TWO explicit parameters (no implicit this), members declare
+    // ONE. Only treat 2+-argument non-static operators as friends.
+
 
     QString cast_type;
 
@@ -1909,7 +1931,12 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
     for (int i=0; i<arguments.size(); ++i) {
         ArgumentModelItem arg = arguments.at(i);
         AbstractMetaArgument *meta_arg = meta_arguments.at(i);
-        if (arg->defaultValue()) {
+        // Qt 6: a replace-default-expression can ADD a default where C++
+        // declares none (e.g. QInputEvent's device defaulting to the primary
+        // keyboard); enter processing when a replacement exists even without
+        // a DOM default.
+        bool hasReplaced = !meta_function->replacedDefaultExpression(m_current_class, i + 1).isEmpty();
+        if (arg->defaultValue() || hasReplaced) {
             QString expr = arg->defaultValueExpression();
             if (!expr.isEmpty())
                 meta_arg->setOriginalDefaultValueExpression(expr);
@@ -1937,6 +1964,70 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
     if (ReportHandler::debugLevel() == ReportHandler::FullDebug)
         foreach(AbstractMetaArgument *arg, meta_arguments)
             ReportHandler::debugFull("   - " + arg->toString());
+
+    // Qt 6: hidden friends (e.g. constexpr friend inline QVector2D
+    // operator+(QVector2D, QVector2D)) bind as free functions, not members,
+    // but the legacy binder loses the friend flag on such inline definitions
+    // (they surface as members, which cannot compile). Detect the shapes and
+    // convert to free calls (drop the self argument, mark Friendly; see
+    // writeFunctionCallAndReturn):
+    // - class-first binary (vec OP other): drop arg 0;
+    // - unary plus/minus (single class argument): drop it (0 args remain);
+    // - reversed scalar multiply (primitive, class): drop arg 1 (scalar
+    //   multiplication commutes, so self-first emission is equivalent).
+    // Genuine members (operator(), operator[], member binary ops with a
+    // single explicit argument) never match: binary member form has exactly
+    // one explicit argument whose... (see below). Stream operators keep
+    // their dedicated handling and are excluded.
+    if (!function_item->isStatic() && !meta_function->isStatic()
+        && (function_name == QLatin1String("operator_add")
+            || function_name == QLatin1String("operator_subtract")
+            || function_name == QLatin1String("operator_multiply")
+            || function_name == QLatin1String("operator_divide")
+            || function_name == QLatin1String("operator_equal")
+            || function_name == QLatin1String("operator_not_equal"))) {
+        // Type entries are stored undecorated (no const/&), so direct
+        // qualified-name comparison detects the self argument.
+        QString selfName = m_current_class ? m_current_class->typeEntry()->qualifiedCppName() : QString();
+        auto argClassName = [](AbstractMetaArgument *metaArg) -> QString {
+            AbstractMetaType *t = metaArg ? metaArg->type() : 0;
+            return (t && t->typeEntry()) ? t->typeEntry()->qualifiedCppName() : QString();
+        };
+        int dropIndex = -1;
+        if (meta_arguments.size() >= 2 && !selfName.isEmpty()
+            && argClassName(meta_arguments.at(0)) == selfName) {
+            // Class-first binary form (member binary ops have a single
+            // explicit argument and never reach this branch).
+            dropIndex = 0;
+        } else if (meta_arguments.size() == 1 && !selfName.isEmpty()
+                   && argClassName(meta_arguments.at(0)) == selfName
+                   && (function_name == QLatin1String("operator_add")
+                       || function_name == QLatin1String("operator_subtract"))
+                   && !meta_function->isConstant()) {
+            // Unary plus/minus friend (Qt 6 vectors etc.). Free functions
+            // cannot be const-qualified, so a const single-argument operator
+            // is a genuine member binary (e.g. QRegion::operator+ const) and
+            // stays untouched. The build verifies each conversion compiles.
+            dropIndex = 0;
+        } else if (meta_arguments.size() >= 2
+                   && function_name == QLatin1String("operator_multiply")) {
+            // Reversed scalar form, e.g. operator*(float, QVector2D).
+            AbstractMetaType *secondType = meta_arguments.at(1)->type();
+            QString secondName = (secondType && secondType->typeEntry())
+                ? secondType->typeEntry()->qualifiedCppName() : QString();
+            AbstractMetaType *firstType = meta_arguments.at(0)->type();
+            if (!selfName.isEmpty() && secondName == selfName && firstType
+                && firstType->typeEntry() && firstType->typeEntry()->isPrimitive())
+                dropIndex = 1;
+        }
+        if (dropIndex >= 0) {
+            delete meta_arguments.takeAt(dropIndex);
+            for (int ai = 0; ai < meta_arguments.size(); ++ai)
+                meta_arguments[ai]->setArgumentIndex(ai);
+            meta_function->setArguments(meta_arguments);
+            *meta_function += AbstractMetaAttributes::Friendly;
+        }
+    }
 
     return meta_function;
 }
@@ -2081,51 +2172,8 @@ AbstractMetaType *AbstractMetaBuilder::translateType(const TypeInfo &_typei, boo
     if (!type)
         type = TypeDatabase::instance()->findFlagsType(qualified_name);
 
-    // 6b. Qt 6: moved-enum flags aliases. When a build loads the holder's
-    // module with generate="no", the per-class alias pass never runs for the
-    // holder, so a base-scope spelling (e.g. QIODeviceBase::OpenMode from a
-    // network class) finds nothing above. Retry under every known enum entry
-    // whose unqualified enum name matches, and register the alias so later
-    // lookups hit step 6 directly.
-    //
-    // The requested qualifier may name the flags typedef directly
-    // (QIODeviceBase::OpenMode), the enum itself (QIODeviceBase::
-    // OpenModeFlag, used when a signature was written against the enum but
-    // the entry models the flags twin), or a QFlags<...> instantiation.
-    if (!type) {
-        int sep = qualified_name.lastIndexOf(QLatin1String("::"));
-        QString shortEnum = (sep >= 0) ? qualified_name.mid(sep + 2) : qualified_name;
-        // Strip a trailing Flag(s)/Mode(s)-style twin suffix? No: match the
-        // qualifier's last component against the enum name, the flags name,
-        // or the flags typedef's last component.
-        SingleTypeEntryHash allEntries = TypeDatabase::instance()->entries();
-        foreach (TypeEntry *candidate, allEntries.values()) {
-            if (candidate == 0 || !candidate->isEnum())
-                continue;
-            QString candName = candidate->qualifiedCppName();
-            int csep = candName.lastIndexOf(QLatin1String("::"));
-            QString candShort = (csep >= 0) ? candName.mid(csep + 2) : candName;
-            const EnumTypeEntry *enumEntry = static_cast<const EnumTypeEntry *>(candidate);
-            FlagsTypeEntry *fte = enumEntry->flags();
-            QString flagsShort;
-            if (fte) {
-                QString flagsName = fte->originalName();
-                int fsep = flagsName.lastIndexOf(QLatin1String("::"));
-                flagsShort = (fsep >= 0) ? flagsName.mid(fsep + 2) : flagsName;
-            }
-            if (shortEnum != candShort && shortEnum != flagsShort)
-                continue;
-            if (!fte)
-                continue;
-            if (TypeDatabase::instance()->findFlagsType(qualified_name) == 0) {
-                FlagsTypeEntry *alias = new FlagsTypeEntry(*fte);
-                alias->setOriginalName(qualified_name);
-                TypeDatabase::instance()->addFlagsType(alias);
-            }
-            type = TypeDatabase::instance()->findFlagsType(qualified_name);
-            break;
-        }
-    }
+    // (6b moved after step 9: scoped resolution must precede global
+    // fuzzy matching. See below.)
 
     // 7. No? Try looking it up as a container type
     if (!type)
@@ -2173,6 +2221,58 @@ AbstractMetaType *AbstractMetaBuilder::translateType(const TypeInfo &_typei, boo
             }
         }
 
+    }
+
+    // 6b. Qt 6: moved-enum flags aliases (see note at step 6 for why this
+    // runs LAST, after scoped step 9). When a build loads the holder's
+    // module with generate="no", the per-class alias pass never runs for the
+    // holder, so a base-scope spelling (e.g. QIODeviceBase::OpenMode from a
+    // network class) finds nothing above. Retry under every known enum entry
+    // whose unqualified enum name matches, and register the alias so later
+    // lookups hit step 6 directly.
+    //
+    // The requested qualifier may name the flags typedef directly
+    // (QIODeviceBase::OpenMode), the enum itself (QIODeviceBase::
+    // OpenModeFlag, used when a signature was written against the enum but
+    // the entry models the flags twin), or a QFlags<...> instantiation.
+    //
+    // Qt 6: TWO passes, enum-name first. A flags-typedef-only match can
+    // hijack an unrelated scope: the enum-name pass finds the true owner
+    // when one exists.
+    if (!type) {
+        int sep = qualified_name.lastIndexOf(QLatin1String("::"));
+        QString shortEnum = (sep >= 0) ? qualified_name.mid(sep + 2) : qualified_name;
+        SingleTypeEntryHash allEntries = TypeDatabase::instance()->entries();
+        for (int pass = 0; pass < 2 && !type; ++pass) {
+        foreach (TypeEntry *candidate, allEntries.values()) {
+            if (candidate == 0 || !candidate->isEnum())
+                continue;
+            QString candName = candidate->qualifiedCppName();
+            int csep = candName.lastIndexOf(QLatin1String("::"));
+            QString candShort = (csep >= 0) ? candName.mid(csep + 2) : candName;
+            const EnumTypeEntry *enumEntry = static_cast<const EnumTypeEntry *>(candidate);
+            FlagsTypeEntry *fte = enumEntry->flags();
+            QString flagsShort;
+            if (fte) {
+                QString flagsName = fte->originalName();
+                int fsep = flagsName.lastIndexOf(QLatin1String("::"));
+                flagsShort = (fsep >= 0) ? flagsName.mid(fsep + 2) : flagsName;
+            }
+            if (pass == 0 && shortEnum != candShort)
+                continue;
+            if (pass == 1 && (shortEnum == candShort || shortEnum != flagsShort))
+                continue;
+            if (!fte)
+                continue;
+            if (TypeDatabase::instance()->findFlagsType(qualified_name) == 0) {
+                FlagsTypeEntry *alias = new FlagsTypeEntry(*fte);
+                alias->setOriginalName(qualified_name);
+                TypeDatabase::instance()->addFlagsType(alias);
+            }
+            type = TypeDatabase::instance()->findFlagsType(qualified_name);
+            break;
+        }
+        }
     }
 
     if (!type) {
@@ -2338,6 +2438,26 @@ QString AbstractMetaBuilder::translateDefaultValue(ArgumentModelItem item, Abstr
         return replaced_expression;
 
     QString expr = item->defaultValueExpression();
+    // Qt 6: braced defaults (= {} / = {...}) recorded by the parser as a
+    // marker spanning the braces. An empty brace pair value-constructs the
+    // parameter type (e.g. QList<T>()); anything else keeps the source
+    // spelling for the shell, which accepts braced construction.
+    if (expr == "{}") {
+        if (type != 0 && type->isContainer()
+            && type->instantiations().size() == 1
+            && type->instantiations().at(0)->typeEntry() != 0) {
+            QString inner = type->instantiations().at(0)->typeEntry()->qualifiedCppName();
+            if (!inner.isEmpty())
+                return QString("%1<%2>()").arg(type->typeEntry()->name(), inner);
+        }
+        if (type != 0 && type->typeEntry() != 0
+            && !type->typeEntry()->qualifiedCppName().isEmpty()
+            && type->indirections() == 0 && !type->isReference()
+            && (type->typeEntry()->isValue() || type->typeEntry()->isContainer())) {
+            return QString("%1()").arg(type->typeEntry()->qualifiedCppName());
+        }
+        return expr;
+    }
     if (type != 0 && type->isPrimitive()) {
         if (type->name() == "boolean") {
             if (expr == "false" || expr=="true") {
