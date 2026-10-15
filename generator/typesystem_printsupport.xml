@@ -2,11 +2,11 @@
 <typesystem package="com.trolltech.qt.printsupport"><load-typesystem name="typesystem_core.xml" generate="no"/><load-typesystem name="typesystem_gui.xml" generate="no"/><load-typesystem name="typesystem_widgets.xml" generate="no"/><rejection class="QPrinterInfo"/><rejection class="QPrinterInfo"/>
   <rejection class="QPrinter" function-name="printerSelectionOption"/>
   <rejection class="QPrinter" function-name="setPrinterSelectionOption"/>
-  <!-- Qt 5: protected constructor, so the generator would fabricate a
-       broken default constructor in the shell -->
-  <rejection class="QAbstractPrintDialog"/>
-
   <enum-type name="QPageSetupDialog::PageSetupDialogOption" flags="QPageSetupDialog::PageSetupDialogOptions"/>
+  <!-- Qt 6: QPrintPreviewWidget::orientation()/setOrientation() use the
+       QPageLayout::Orientation enum. Declare it so the type resolves to the
+       Qt 6 enum instead of the short-name flags fallback. -->
+  <enum-type name="QPageLayout::Orientation"/>
   <enum-type name="QPrinter::ColorMode"/>
   <enum-type name="QPrinter::Orientation"/>
   <enum-type name="QPrinter::OutputFormat"/>
@@ -45,10 +45,100 @@
     <extra-includes>
         <include file-name="QPrinterInfo" location="global"/>
     </extra-includes>
+
+    <!-- Qt 6 renamed the copy-count and orientation accessors (setCopyCount,
+         setPageOrientation, pageLayout().orientation()) and dropped the
+         orientation getter. Keep the Qt 5 spellings as computed aliases over
+         the native API so existing scripts keep working. -->
+    <inject-code class="native" position="prototype-initialization">
+    {
+        QScriptValue funNumCopies = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QPrinter *p = qscriptvalue_cast&lt;QPrinter*&gt;(ctx-&gt;thisObject());
+                if (!p)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QPrinter.numCopies(): this object is not a QPrinter"));
+                return QScriptValue(eng, p-&gt;copyCount());
+            }, 0);
+        proto.setProperty(QString::fromLatin1("numCopies"), funNumCopies, QScriptValue::SkipInEnumeration);
+
+        QScriptValue funOrientation = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QPrinter *p = qscriptvalue_cast&lt;QPrinter*&gt;(ctx-&gt;thisObject());
+                if (!p)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QPrinter.orientation(): this object is not a QPrinter"));
+                return qScriptValueFromValue(eng, p-&gt;pageLayout().orientation());
+            }, 0);
+        proto.setProperty(QString::fromLatin1("orientation"), funOrientation, QScriptValue::SkipInEnumeration);
+
+        QScriptValue funSetOrientation = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QPrinter *p = qscriptvalue_cast&lt;QPrinter*&gt;(ctx-&gt;thisObject());
+                if (!p)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QPrinter.setOrientation(): this object is not a QPrinter"));
+                p-&gt;setPageOrientation(qscriptvalue_cast&lt;QPageLayout::Orientation&gt;(ctx-&gt;argument(0)));
+                return eng-&gt;undefinedValue();
+            }, 1);
+        proto.setProperty(QString::fromLatin1("setOrientation"), funSetOrientation, QScriptValue::SkipInEnumeration);
+
+        QScriptValue funSetPageSizeMM = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QPrinter *p = qscriptvalue_cast&lt;QPrinter*&gt;(ctx-&gt;thisObject());
+                if (!p)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QPrinter.setPageSizeMM(): this object is not a QPrinter"));
+                p-&gt;setPageSize(QPageSize(qscriptvalue_cast&lt;QSizeF&gt;(ctx-&gt;argument(0)), QPageSize::Millimeter));
+                return eng-&gt;undefinedValue();
+            }, 1);
+        proto.setProperty(QString::fromLatin1("setPageSizeMM"), funSetPageSizeMM, QScriptValue::SkipInEnumeration);
+
+        QScriptValue funSetPageMargins = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QPrinter *p = qscriptvalue_cast&lt;QPrinter*&gt;(ctx-&gt;thisObject());
+                if (!p)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QPrinter.setPageMargins(): this object is not a QPrinter"));
+                if (ctx-&gt;argumentCount() &lt; 5)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QPrinter.setPageMargins(): expected left, top, right, bottom, unit"));
+                const QMarginsF margins(ctx-&gt;argument(0).toNumber(), ctx-&gt;argument(1).toNumber(),
+                                        ctx-&gt;argument(2).toNumber(), ctx-&gt;argument(3).toNumber());
+                p-&gt;setPageMargins(margins, static_cast&lt;QPageLayout::Unit&gt;(ctx-&gt;argument(4).toInt32()));
+                return eng-&gt;undefinedValue();
+            }, 1);
+        proto.setProperty(QString::fromLatin1("setPageMargins"), funSetPageMargins, QScriptValue::SkipInEnumeration);
+    }
+    </inject-code>
   </object-type>
 
   <object-type name="QAbstractPageSetupDialog"/>
-  <object-type name="QAbstractPrintDialog"/>
+  <object-type name="QAbstractPrintDialog">
+    <extra-includes>
+        <include file-name="QPrintDialog" location="global"/>
+    </extra-includes>
+    <!-- Qt 6 moved the option query to QPrintDialog::testOption; the Qt 5
+         spelling stays on the abstract base so QPrintDialog inherits it. -->
+    <inject-code class="native" position="prototype-initialization">
+    {
+        QScriptValue funIsOptionEnabled = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QAbstractPrintDialog *d = qscriptvalue_cast&lt;QAbstractPrintDialog*&gt;(ctx-&gt;thisObject());
+                if (!d)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("isOptionEnabled(): this object is not a QAbstractPrintDialog"));
+                QPrintDialog *pd = qobject_cast&lt;QPrintDialog*&gt;(d);
+                if (!pd)
+                    return ctx-&gt;throwError(QString::fromLatin1("isOptionEnabled() is only available for QPrintDialog in Qt 6"));
+                const QAbstractPrintDialog::PrintDialogOption option =
+                    qscriptvalue_cast&lt;QAbstractPrintDialog::PrintDialogOption&gt;(ctx-&gt;argument(0));
+                return QScriptValue(eng, pd-&gt;testOption(option));
+            }, 1);
+        proto.setProperty(QString::fromLatin1("isOptionEnabled"), funIsOptionEnabled, QScriptValue::SkipInEnumeration);
+    }
+    </inject-code>
+  </object-type>
 
   <object-type name="QPageSetupDialog"/>
 
