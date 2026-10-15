@@ -2652,9 +2652,22 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
             AbstractMetaType *atype = argument->type();
 
             AbstractMetaArgument *arg = argument->copy();
-            arg->setType(inheritTemplateType(template_types, atype, &ok));
+            AbstractMetaType *inherited = inheritTemplateType(template_types, atype, &ok);
             if (!ok)
                 break;
+            // Qt 6: a container argument written against the class's own
+            // template parameter (QList<T> & in QList::swap) can come through
+            // without its instantiation. That leaves the generated argument
+            // conversion uninstantiated and uncompilable, so fill it in from
+            // the single instantiation of the template.
+            if (inherited && inherited->typeEntry()->isContainer()
+                && inherited->instantiations().isEmpty()
+                && template_types.size() == 1) {
+                QList<AbstractMetaType *> instantiations;
+                instantiations << template_types.at(0)->copy();
+                inherited->setInstantiations(instantiations);
+            }
+            arg->setType(inherited);
             f->addArgument(arg);
         }
 
