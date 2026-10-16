@@ -1558,13 +1558,6 @@
     </modify-function>
   </object-type>
 
-  <value-type name="QRegExp">
-    <modify-function signature="cap(int)" remove="all"/>
-    <modify-function signature="capturedTexts()" remove="all"/>
-    <modify-function signature="pos(int)" remove="all"/>
-    <modify-function signature="errorString()" remove="all"/>
-  </value-type>
-
     <primitive-type name="bool"/>    
     <primitive-type name="double"/>
     <primitive-type name="qreal"/>

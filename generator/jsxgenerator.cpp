@@ -403,7 +403,7 @@ static bool skipType(QString& type)
             type == "Qt_HANDLE" || type.startsWith("QWebPluginFactory") ||
             type.endsWith("iterator") || type == "Qt_QAbstractItemView_CursorAction" ||
             type == "Qt_QAbstractSlider_SliderChange" || type.startsWith("Qt_QTextLayout_FormatRange") ||
-            type == "Qt_QPainterPath_Element" || type == "Qt_QTextCodec_ConverterState" ||
+            type == "Qt_QPainterPath_Element" ||
             type == "Qt_QAbstractItemView_DropIndicatorPosition" || type == "Qt_QAbstractItemView_State" ||
             type == "QAbstractProxyModel" || type == "Qt_QFontDatabase_WritingSystem" ||
             type == "Qt_QTextEdit_ExtraSelection[]" || type == "Qt_QSqlResult_BindingSyntax");
@@ -797,7 +797,6 @@ void JSXGenerator::write(QTextStream &o, const AbstractMetaClass *meta_class)
     QMap<QString, QString> nativeTypes;
     nativeTypes["QDateTime"] = "Date";
     nativeTypes["QString"] = "string";
-    nativeTypes["QStringRef"] = "string";
     nativeTypes["QChar"] = "string";
     nativeTypes["char"] = "string";
     nativeTypes["intList"] = "int[]";
@@ -822,7 +821,7 @@ void JSXGenerator::write(QTextStream &o, const AbstractMetaClass *meta_class)
     nativeTypes["double"] = "number";
     nativeTypes["bool"] = "boolean";
     nativeTypes["QStringList"] = "string[]";
-    nativeTypes["QRegExp"] = "RegExp";
+    nativeTypes["QRegularExpression"] = "RegExp";
     nativeTypes["QVariant"] = "variant";
     nativeTypes["QVariant[]"] = "variant[]";
     nativeTypes["void"] = "variant";

@@ -470,11 +470,10 @@
     </inject-code>
   </namespace-type>
 
-  <!-- Qt 6: QRegularExpression replaces QRegExp as the regex argument type
-       (e.g. QTextDocument::find). The type must resolve for those overloads
-       to bind, but it is not generated as a class: the script surface stays
-       QRegExp, and the find arguments are replaced below so the call can
-       convert through qtscriptRegularExpression. -->
+  <!-- QRegularExpression is Qt 6's regex argument type (e.g.
+       QTextDocument::find). The type must resolve for those overloads to
+       bind, but it is not generated as a class: scripts pass native
+       JavaScript RegExp values, converted at the call site. -->
   <value-type name="QRegularExpression" generate="no">
     <include file-name="QRegularExpression" location="global"/>
   </value-type>
@@ -546,8 +545,6 @@
   <enum-type name="QProcess::ProcessChannelMode"/>
   <enum-type name="QProcess::ProcessError"/>
   <enum-type name="QProcess::ProcessState"/>
-  <enum-type name="QRegExp::CaretMode"/>
-  <enum-type name="QRegExp::PatternSyntax"/>
   <enum-type name="QSettings::Format"/>
   <enum-type name="QSettings::Scope"/>
   <enum-type name="QSettings::Status"/>
@@ -1028,13 +1025,6 @@
     <!--### Obsolete in 4.3-->
     <modify-function signature="toPunycode(const QString&amp;)" remove="all"/>
     <!--### Obsolete in 4.3-->
-  </value-type>
-
-  <value-type name="QRegExp">
-    <extra-includes>
-      <include file-name="QStringList" location="global"/>
-    </extra-includes>
-    <modify-function signature="operator=(QRegExp)" remove="all"/>
   </value-type>
 
   <value-type name="QFileInfo">
@@ -1609,7 +1599,6 @@
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QUuid' has equals operators but no qHash() function. Hashcode of objects will consistently be 0." />
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QLocale' has equals operators but no qHash() function. Hashcode of objects will consistently be 0." />
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QFuture' has equals operators but no qHash() function. Hashcode of objects will consistently be 0." />
-  <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QRegExp' has equals operators but no qHash() function. Hashcode of objects will consistently be 0." />
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QFutureVoid' has equals operators but no qHash() function. Hashcode of objects will consistently be 0." />
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QUrl' has equals operators but no qHash() function. Hashcode of objects will consistently be 0." />
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Class 'QProcessEnvironment' has equals operators but no qHash() function. Hashcode of objects will consistently be 0." />

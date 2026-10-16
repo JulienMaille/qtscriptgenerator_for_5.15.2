@@ -230,8 +230,6 @@ static QString builtinTypeTesterFunction(const QString &typeName)
         return QLatin1String("isVariant");
 //    else if (typeName == QLatin1String("QDateTime"))
 //        return QLatin1String("isDate");
-    else if (typeName == QLatin1String("QRegExp"))
-        return QLatin1String("isRegExp");
     else if (typeName == QLatin1String("QObject*"))
         return QLatin1String("isQObject");
     return QString();
@@ -322,11 +320,10 @@ static void writeArgumentTypeTests(QTextStream &stream, const AbstractMetaFuncti
             // variants) via owning locals; the metatype-id test would only
             // match an actual view variant, so test the convertible forms.
             stream << "(" << scriptArg << ".isString() || " << scriptArg << ".isVariant())";
-        } else if (typeName == "QRegExp") {
-            // Qt 6: QRegExp is scripted bindings-repo surface (no Qt 6 C++
-            // class). Accept both a native JavaScript RegExp and a QRegExp
-            // object so the regex overloads dispatch like the Qt 5 bindings.
-            stream << "qtscriptIsRegExp(" << scriptArg << ")";
+        } else if (typeName == "QRegularExpression") {
+            // A native JavaScript RegExp converts at the call site; test it
+            // directly so the regex overloads dispatch.
+            stream << scriptArg << ".isRegExp()";
         } else {
             QString tester = builtinTypeTesterFunction(typeName);
             if (!tester.isEmpty()) {
@@ -366,8 +363,6 @@ static QString builtinConversionFunction(const QString &typeName)
         return QLatin1String("toVariant");
     else if (typeName == QLatin1String("QDateTime"))
         return QLatin1String("toDateTime");
-    else if (typeName == QLatin1String("QRegExp"))
-        return QLatin1String("toRegExp");
     else if (typeName == QLatin1String("QObject*"))
         return QLatin1String("toQObject");
     // Qt 6: fixed-width Qt typedefs have no QScriptValue converter; convert
@@ -462,11 +457,10 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                     ++scriptArgIndex;
                 continue;
             }
-            // Qt 6: QRegExp is scripted bindings-repo surface (no Qt 6 C++
-            // class). Extract through qtscriptToRegExp so both a native
-            // JavaScript RegExp and a QRegExp object convert.
-            if (typeName == QLatin1String("QRegExp")) {
-                stream << indentStr << "QRegExp " << actualOut << " = qtscriptToRegExp(" << actualIn << ");" << endl;
+            // QRegularExpression has no script metatype converter; build it
+            // from a native JavaScript RegExp at the call site.
+            if (typeName == QLatin1String("QRegularExpression")) {
+                stream << indentStr << "QRegularExpression " << actualOut << " = " << actualIn << ".toRegExp();" << endl;
                 if (!fun->argumentRemoved(j+1))
                     ++scriptArgIndex;
                 continue;
@@ -594,25 +588,12 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
   binding. Those arguments must have been prepared already in variables
   _q_arg0, _q_arg1, .. in the generated code.
 */
-static void writeArguments(QTextStream &stream, const AbstractMetaFunction *fun, int count)
+static void writeArguments(QTextStream &stream, const AbstractMetaFunction *, int count)
 {
     for (int i = 0; i < count; ++i) {
         if (i > 0)
             stream << ", ";
-        // Qt 6: a QRegularExpression parameter is scripted as QRegExp (see
-        // writePrepareArguments); convert the prepared local back to the
-        // QRegularExpression the native call expects.
-        bool wrapRegularExpression = false;
-        if (fun && i < fun->arguments().size()) {
-            AbstractMetaType *argType = fun->arguments().at(i)->type();
-            if (argType && normalizedType(argType) == QLatin1String("QRegularExpression"))
-                wrapRegularExpression = true;
-        }
-        if (wrapRegularExpression)
-            stream << "qtscriptRegularExpression(";
         stream << "_q_arg" << i;
-        if (wrapRegularExpression)
-            stream << ")";
     }
 }
 
@@ -1415,9 +1396,6 @@ void maybeDeclareMetaType(QTextStream &stream, const QString &typeName,
         (nameFootPrint == QLatin1String("QFontMetricsF"))       ||
         // provided by the hand-written __package_shared.h headers
         (nameFootPrint == QLatin1String("QEvent"))              ||
-        // provided by the bindings-repo QRegExp shim and declared by
-        // QtScript's own qregexp.h
-        (nameFootPrint == QLatin1String("QRegExp"))              ||
         // Qt 5: copy constructor is deleted; Q_DECLARE_METATYPE(QTextStream)
         // would not compile
         (nameFootPrint == QLatin1String("QTextStream")))
@@ -1438,7 +1416,6 @@ void maybeDeclareMetaType(QTextStream &stream, const QString &typeName,
             || name == QLatin1String("QStack")
             || name == QLatin1String("QQueue")
             || name == QLatin1String("QMultiMap")
-            || name == QLatin1String("QLinkedList")
             || name == QLatin1String("QStringList")))
     {
         return;

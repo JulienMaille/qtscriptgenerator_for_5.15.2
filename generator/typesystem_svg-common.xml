@@ -6,7 +6,6 @@
   <object-type name="QSvgRenderer">
     <extra-includes>
         <include file-name="QRectF" location="global" />
-        <include file-name="QMatrix" location="global" />
         <include file-name="QSize" location="global" />
         <include file-name="QByteArray" location="global" />
     </extra-includes>
@@ -34,11 +33,6 @@
         <include file-name="QSvgRenderer" location="global" />
         <include file-name="QSize" location="global" />
     </extra-includes>
-
-    <modify-function signature="matrix()const" remove="all"/>
-    <modify-function signature="resetMatrix()" remove="all"/>
-    <modify-function signature="sceneMatrix()const" remove="all"/>
-    <modify-function signature="setMatrix(QMatrix, bool)" remove="all"/>
  </object-type>
 
 </typesystem>

@@ -115,7 +115,6 @@
   <enum-type name="QAbstractSpinBox::ButtonSymbols"/>
   <enum-type name="QAbstractSpinBox::CorrectionMode"/>
   <enum-type name="QAbstractSpinBox::StepEnabledFlag" flags="QAbstractSpinBox::StepEnabled"/>
-  <enum-type name="QDirModel::Roles"/>
   <enum-type name="QMdiArea::AreaOption" flags="QMdiArea::AreaOptions"/>
   <enum-type name="QMdiArea::WindowOrder"/>
   <enum-type name="QMdiArea::ViewMode"/>
@@ -644,14 +643,6 @@
     <modify-function signature="removeButton(QAbstractButton*)">
         <modify-argument index="1">
             <reference-count action="ignore"/>
-        </modify-argument>
-    </modify-function>
-  </object-type>
-  <object-type name="QDirModel">
-     <modify-function signature="parent()const" remove="all"/>
-    <modify-function signature="setIconProvider(QFileIconProvider*)">
-        <modify-argument index="1">
-            <reference-count action="set" variable-name="__rcIconProvider"/>
         </modify-argument>
     </modify-function>
   </object-type>
@@ -3380,9 +3371,6 @@
 
   </object-type>
 
-  <object-type name="QDesktopWidget">
-  </object-type>
-
   <object-type name="QFrame">
   </object-type>
 
@@ -3547,12 +3535,6 @@
             <reference-count action="ignore"/>
         </modify-argument>
     </modify-function>
-    <!-- Qt 6 find() takes QRegularExpression; keep the Qt 5 QRegExp surface. -->
-    <modify-function signature="find(QRegularExpression,QFlags&lt;QTextDocument::FindFlag&gt;)">
-        <modify-argument index="1">
-            <replace-type modified-type="QRegExp"/>
-        </modify-argument>
-    </modify-function>
   </object-type>
 
   <object-type name="QAction">
@@ -3643,9 +3625,6 @@
       </modify-argument>
     </modify-function>
   </object-type>
-
-  <object-type name="QMouseEventTransition"/>
-  <object-type name="QKeyEventTransition"/>
 
   <!-- Qt 6.4 added clearButtonEnabled; Qt 6.5 added maximumSequenceLength.
        The QKeyCombination list property has no sequence binding, so it is
@@ -3925,12 +3904,6 @@
             <reference-count action="ignore"/>
         </modify-argument>
     </modify-function>
-    <!-- Qt 6 find() takes QRegularExpression; keep the Qt 5 QRegExp surface. -->
-    <modify-function signature="find(QRegularExpression,QFlags&lt;QTextDocument::FindFlag&gt;)">
-        <modify-argument index="1">
-            <replace-type modified-type="QRegExp"/>
-        </modify-argument>
-    </modify-function>
   </object-type>
   <object-type name="QStyledItemDelegate">
     <modify-function signature="setItemEditorFactory(QItemEditorFactory*)">
@@ -3954,7 +3927,6 @@
   <interface-type name="QStyleFactoryInterface" java-name="QAbstractStyleFactory"/>
 
   <object-type name="QInputContextPlugin"/>
-  <object-type name="QPictureFormatPlugin"/>
   <object-type name="QStylePlugin"/>
   <object-type name="QGesture"/>
   <object-type name="QGraphicsAnchorLayout"/>

@@ -557,60 +557,6 @@
     <modify-function signature="data()const" remove="all"/>
     <modify-function signature="operator()(int, int)const" remove="all"/>
   </value-type>
-  <value-type name="QMatrix">
-      <extra-includes>
-        <include file-name="QPainterPath" location="global"/>
-      </extra-includes>
-      <modify-function signature="map(int,int,int*,int*)const" remove="all"/>
-      <modify-function signature="map(qreal,qreal,qreal*,qreal*)const" remove="all"/>
-      <modify-function signature="operator=(QMatrix)" remove="all"/>
-      <modify-function signature="operator*(QMatrix)const" access="private"/>
-      <modify-function signature="operator*=(QMatrix)" access="private"/>
-      <modify-function signature="rotate(qreal)" access="private" rename="rotate_private"/>
-      <modify-function signature="scale(qreal,qreal)" access="private" rename="scale_private"/>
-      <modify-function signature="shear(qreal,qreal)" access="private" rename="shear_private"/>
-      <modify-function signature="translate(qreal,qreal)" access="private" rename="translate_private"/>
-      <modify-function signature="inverted(bool*)const">
-        <access modifier="private"/>
-        <modify-argument index="1">
-            <!-- <remove-default-expression/> -->
-        </modify-argument>
-      </modify-function>
-
-    <inject-code>
-      <insert-template name="core.unary_other_type">
-        <replace from="%FUNCTION_NAME" to="rotate"/>
-        <replace from="%OUT_TYPE" to="QMatrix"/>
-        <replace from="%IN_TYPE" to="double"/>
-      </insert-template>
-      <insert-template name="core.private_function_return_self">
-        <replace from="%RETURN_TYPE" to="QMatrix"/>
-        <replace from="%FUNCTION_NAME" to="scale"/>
-        <replace from="%ARGUMENTS" to="double sx, double sy"/>
-        <replace from="%ARGUMENT_NAMES" to="sx, sy"/>
-      </insert-template>
-
-      <insert-template name="core.private_function_return_self">
-        <replace from="%RETURN_TYPE" to="QMatrix"/>
-        <replace from="%FUNCTION_NAME" to="shear"/>
-        <replace from="%ARGUMENTS" to="double sh, double sv"/>
-        <replace from="%ARGUMENT_NAMES" to="sh, sv"/>
-      </insert-template>
-
-      <insert-template name="core.private_function_return_self">
-        <replace from="%RETURN_TYPE" to="QMatrix"/>
-        <replace from="%FUNCTION_NAME" to="translate"/>
-        <replace from="%ARGUMENTS" to="double dx, double dy"/>
-        <replace from="%ARGUMENT_NAMES" to="dx, dy"/>
-      </insert-template>
-    </inject-code>
-  
-      <modify-function signature="inverted(bool*)const">
-        <modify-argument index="1">
-            <remove-argument/>
-        </modify-argument>
-      </modify-function>
-  </value-type>
 
   <value-type name="QConicalGradient" polymorphic-id-expression="%1-&gt;type() == QGradient::ConicalGradient">
     <custom-constructor>
@@ -673,21 +619,6 @@
   </value-type>
 
   <value-type name="QImage" expense-limit="67108864" expense-cost="height()*bytesPerLine()">
-    <!-- Qt 6: byteCount() was renamed sizeInBytes(); keep the Qt 5 spelling
-         as a compatibility shim (the suite asserts image.byteCount() > 0). -->
-    <inject-code class="native" position="prototype-initialization">
-    {
-        QScriptValue funByteCount = engine-&gt;newFunction(
-            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
-                QImage *e = qscriptvalue_cast&lt;QImage*&gt;(ctx-&gt;thisObject());
-                if (!e)
-                    return ctx-&gt;throwError(QScriptContext::TypeError,
-                        QString::fromLatin1("QImage.byteCount(): this object is not a QImage"));
-                return QScriptValue(eng, static_cast&lt;int&gt;(e-&gt;sizeInBytes()));
-            }, 0);
-        proto.setProperty(QString::fromLatin1("byteCount"), funByteCount, QScriptValue::SkipInEnumeration);
-    }
-    </inject-code>
     <modify-function signature="QImage(const char *, const char *)">
         <remove/>
     </modify-function>
@@ -709,7 +640,6 @@
 
     <extra-includes>
         <include file-name="QStringList" location="global"/>
-        <include file-name="QMatrix" location="global"/>
     </extra-includes>
 
     <modify-function signature="QImage(uchar*,int,int,QImage::Format)">
@@ -1138,80 +1068,6 @@
   <object-type name="QIntValidator"/>
   <object-type name="QPainterPathStroker"/>
 
-  <object-type name="QPictureIO">
-      <modify-function signature="QPictureIO(QIODevice*,const char*)">
-        <access modifier="private"/>
-         <modify-argument index="1">
-            <reference-count action="set" variable-name="__rcDevice"/>
-        </modify-argument>
-    </modify-function>
-
-    <modify-function signature="setIODevice(QIODevice*)">
-        <modify-argument index="1">
-            <reference-count action="set" variable-name="__rcDevice"/>
-        </modify-argument>
-    </modify-function>
-
-    <modify-function signature="QPictureIO(QString,const char*)">
-        <access modifier="private"/>
-    </modify-function>
-
-    <modify-function signature="format()const">
-        <access modifier="private"/>
-        <rename to="format_private"/>
-    </modify-function>
-
-    <modify-function signature="parameters()const">
-        <access modifier="private"/>
-        <rename to="parameters_private"/>
-    </modify-function>
-
-    <modify-function signature="setFormat(const char*)">
-        <access modifier="private"/>
-    </modify-function>
-
-    <modify-function signature="setParameters(const char*)">
-        <access modifier="private"/>
-    </modify-function>
-  
-    <modify-function signature="QPictureIO(QIODevice*,const char*)">
-      <modify-argument index="2">
-        <replace-type modified-type="QString"/>
-        <conversion-rule class="native">
-          <insert-template name="core.convert_string_arg_to_char*"/>
-        </conversion-rule>            
-      </modify-argument>
-    </modify-function>
-
-    <modify-function signature="QPictureIO(QString,const char*)">
-      <modify-argument index="2">
-        <replace-type modified-type="QString"/>
-        <conversion-rule class="native">
-          <insert-template name="core.convert_string_arg_to_char*"/>
-        </conversion-rule>            
-      </modify-argument>
-    </modify-function>
-
-    <modify-function signature="setFormat(const char*)">
-      <modify-argument index="1">
-        <replace-type modified-type="QString"/>
-        <conversion-rule class="native">
-          <insert-template name="core.convert_string_arg_to_char*"/>
-        </conversion-rule>            
-      </modify-argument>
-    </modify-function>
-
-    <modify-function signature="setParameters(const char*)">
-      <modify-argument index="1">
-        <replace-type modified-type="QString"/>
-        <conversion-rule class="native">
-          <insert-template name="core.convert_string_arg_to_char*"/>
-        </conversion-rule>            
-      </modify-argument>
-    </modify-function>
-    <modify-function signature="windowOpacity()const" remove="all"/>
-  </object-type>
-
   <object-type name="QPixmapCache">
     <modify-function signature="find(QString)">
         <remove/>
@@ -1222,8 +1078,6 @@
         <access modifier="private"/>
     </modify-function>
   </object-type>
-
-  <object-type name="QRegExpValidator"/>
 
   <object-type name="QSyntaxHighlighter">
     <modify-function signature="setCurrentBlockUserData(QTextBlockUserData*)">
@@ -1612,27 +1466,9 @@
     <modify-function signature="undo(QTextCursor*)">
         <access modifier="private"/>
     </modify-function>
-    <!-- Qt 6 find() takes QRegularExpression; keep the Qt 5 QRegExp script
-         surface. The argument is scripted as QRegExp and converted back to
-         QRegularExpression at the native call (see classgenerator). -->
-    <modify-function signature="find(QRegularExpression,int,QFlags&lt;QTextDocument::FindFlag&gt;)const">
-        <modify-argument index="1">
-            <replace-type modified-type="QRegExp"/>
-        </modify-argument>
-    </modify-function>
-    <modify-function signature="find(QRegularExpression,QTextCursor,QFlags&lt;QTextDocument::FindFlag&gt;)const">
-        <modify-argument index="1">
-            <replace-type modified-type="QRegExp"/>
-        </modify-argument>
-    </modify-function>
   </object-type>
 
   <object-type name="QTextDocumentWriter">
-    <modify-function signature="setCodec(QTextCodec*)">
-        <modify-argument index="1">
-            <reference-count action="set" variable-name="__rcCodec"/>
-        </modify-argument>
-    </modify-function>
     <modify-function signature="setDevice(QIODevice*)">
         <modify-argument index="1">
             <reference-count action="set" variable-name="__rcDevice"/>
