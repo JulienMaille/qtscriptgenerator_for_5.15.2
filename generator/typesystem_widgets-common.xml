@@ -11,10 +11,6 @@
   <rejection class="QWindowsMobileStyle" />
   <rejection class="QItemEditorCreator"/>
   <rejection class="QLibrary"/>
-  <rejection class="QLinkedList"/>
-  <rejection class="QLinkedListData"/>
-  <rejection class="QLinkedListIterator"/>
-  <rejection class="QLinkedListNode"/>
   <rejection class="QMimeSource"/>
   <rejection class="QStandardItemEditorCreator"/>
   <rejection class="QStyleOptionQ3DockWindow"/>

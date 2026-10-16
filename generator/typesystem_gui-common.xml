@@ -13,10 +13,6 @@
   <rejection class="QBrushData"/>
   <rejection class="QImageTextKeyLang"/>
   <rejection class="QLibrary"/>
-  <rejection class="QLinkedList"/>
-  <rejection class="QLinkedListData"/>
-  <rejection class="QLinkedListIterator"/>
-  <rejection class="QLinkedListNode"/>
   <rejection class="QPainterPathPrivate"/>
   <rejection class="QRegionData"/>
   <rejection class="QTextFrameLayoutData"/>
@@ -33,7 +29,6 @@
   <rejection class="QAccessible" function-name="installUpdateHandler"/>
   <rejection class="QAccessible" function-name="removeFactory"/>
   <rejection class="QBrush" function-name="cleanUp"/>
-  <rejection class="QPictureIO" function-name="defineIOHandler"/>
   <rejection class="QPolygon" function-name="putPoints"/>
   <rejection class="QPolygon" function-name="setPoints"/>
   <rejection class="QPolygon" function-name="setPoint"/>
@@ -1397,10 +1392,6 @@
             <remove-default-expression/>
         </modify-argument>
     </modify-function>
-    <modify-function signature="matrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-    <modify-function signature="matrixEnabled()const" remove="all"/> <!--### Obsolete in 4.3-->
-    <modify-function signature="setMatrix(QMatrix, bool)" remove="all"/> <!--### Obsolete in 4.3-->
-    <modify-function signature="setMatrixEnabled(bool)" remove="all"/> <!--### Obsolete in 4.3-->
   </object-type>
 
   <object-type name="QGuiApplication"/>

@@ -239,10 +239,6 @@
   <rejection class="QInternal"/>
   <rejection class="QIncompatibleFlag" />
   <rejection class="QLibrary"/>
-  <rejection class="QLinkedList"/>
-  <rejection class="QLinkedListData"/>
-  <rejection class="QLinkedListIterator"/>
-  <rejection class="QLinkedListNode"/>
   <rejection class="QListData"/>
   <rejection class="QListIterator"/>
   <rejection class="QMap"/>
@@ -943,14 +939,10 @@
     <modify-function signature="operator=(QLocale)" remove="all"/>
   </value-type>
 
-  <!-- Qt 6: QTextCodec/QTextDecoder/QTextEncoder are removed (Qt 5.15
-       deprecated, Qt 6 gone). The oracle replaced them with a hand-written
-       QStringConverter namespace object holding only the Encoding enum;
-       codecs/converters themselves are deliberately not bound. Suppress the
-       legacy classes outright so no stale codec surface generates.
-       NOTE: <rejection> only gates DOM traversal; the class entries below
-       would still resolve in translateType(), so the entries themselves are
-       deleted (see QTextCodec/QTextDecoder/QTextEncoder further down). -->
+  <!-- QTextCodec/QTextDecoder/QTextEncoder do not exist in Qt 6; the
+       QStringConverter Encoding enum below is the only codec-related
+       surface. These rejections guard against any stale reference
+       resolving. -->
   <rejection class="QTextCodec"/>
   <rejection class="QTextDecoder"/>
   <rejection class="QTextEncoder"/>

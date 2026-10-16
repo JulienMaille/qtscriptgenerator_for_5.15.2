@@ -58,8 +58,6 @@
   </namespace-type>
 
   <!-- classes that aren't deemed relevant to scripts -->
-  <rejection class="QTextCodec::ConverterState"/>
-  <rejection class="QTextCodecFactoryInterface"/>
   <rejection class="QAbstractEventDispatcher"/>
   <rejection class="QAbstractFileEngine"/>
   <rejection class="QAbstractFileEngineHandler"/>
@@ -1608,7 +1606,6 @@
     <primitive-type name="qint32"/>
 
   <suppress-warning text="WARNING(MetaJavaBuilder) :: signal 'finished' in class 'QProcess' is overloaded." />
-  <suppress-warning text="WARNING(MetaJavaBuilder) :: missing required class for enums: QRegExp" />
   <suppress-warning text="WARNING(MetaJavaBuilder) :: enum 'QtValidLicenseForScriptToolsModule' does not have a type entry or is not an enum" />
   <suppress-warning text="WARNING(MetaJavaBuilder) :: Rejected enum has no alternative...: QDataStream::Qt_4_5" />
   <suppress-warning text="WARNING(MetaJavaBuilder) :: unhandled enum value: Qt::MatchFlags(Qt::MatchStartsWith in Qt::MatchFlag" />
