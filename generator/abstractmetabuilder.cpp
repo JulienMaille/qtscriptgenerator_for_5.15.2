@@ -59,6 +59,20 @@
 #include <QtCore/QVariant>
 #include <algorithm>
 
+// Qt 6: first declared enumerator of an enum type entry, spelled for C++
+// (QValidator::Invalid, ...). Shell overrides use it as the failure value
+// when a script override of an out-argument virtual raises an exception.
+QHash<const EnumTypeEntry *, QString> &registeredEnumFailureLiterals()
+{
+    static QHash<const EnumTypeEntry *, QString> map;
+    return map;
+}
+
+QString enumFailureLiteral(const EnumTypeEntry *entry)
+{
+    return entry ? registeredEnumFailureLiterals().value(entry) : QString();
+}
+
 // Qt 6: endl() lives in namespace Qt since 6.0; restore bare use.
 using Qt::endl;
 
@@ -1087,6 +1101,18 @@ AbstractMetaEnum *AbstractMetaBuilder::traverseEnum(EnumModelItem enum_item, Abs
 
     QFileInfo info(enum_item->fileName());
     meta_enum->typeEntry()->setInclude(Include(Include::IncludePath, info.fileName()));
+
+    // Qt 6: record the first declared enumerator spelled for C++ so shell
+    // overrides can yield a failure value when a script override of an
+    // out-argument virtual raises an exception (QValidator::Invalid).
+    const AbstractMetaEnumValueList enum_values = meta_enum->values();
+    if (!enum_values.isEmpty()) {
+        const EnumTypeEntry *ete = meta_enum->typeEntry();
+        QString literal = meta_enum->isScoped()
+            ? ete->qualifiedCppName() + QLatin1String("::") + enum_values.first()->name()
+            : ete->qualifier() + QLatin1String("::") + enum_values.first()->name();
+        registeredEnumFailureLiterals().insert(ete, literal);
+    }
 
     m_enums << meta_enum;
 

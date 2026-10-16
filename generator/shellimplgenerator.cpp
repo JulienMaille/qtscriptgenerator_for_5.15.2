@@ -51,6 +51,57 @@ extern void declareFunctionMetaTypes(QTextStream &stream,
                                      const AbstractMetaFunctionList &functions,
                                      QSet<QString> &registeredTypeNames);
 
+// Defined in abstractmetabuilder.cpp: first declared enumerator of an enum
+// type entry, spelled for C++ (QValidator::Invalid, ...).
+extern QString enumFailureLiteral(const EnumTypeEntry *entry);
+
+// Qt 6: a C++ virtual that takes a non-const reference to a value or
+// primitive type expects the callee to write back into it
+// (QValidator::fixup(QString&), QAbstractSpinBox::validate(QString&,int&)).
+// QtScript receives copies, so the script override carries results back
+// through its return value. The generated shell unpacks them again:
+//   void return + exactly one out-arg of type QString&
+//       -> the returned string (fixup);
+//   enum return + out-args
+//       -> object {state = <return>, <argName> = <out-arg>...} (validate).
+// Unraised results keep the plain-call behavior, so the contract only
+// matters to overrides that return the documented shapes.
+static bool outArgEngagesStringPack(const AbstractMetaFunction *fun,
+                                    const QList<QPair<QString, AbstractMetaType *> > &outArgs)
+{
+    if (fun->type() != 0)
+        return false;
+    if (outArgs.size() != 1)
+        return false;
+    const TypeEntry *te = outArgs.first().second->typeEntry();
+    return te && te->qualifiedCppName() == QLatin1String("QString");
+}
+
+static bool outArgEngagesObjectPack(const QList<QPair<QString, AbstractMetaType *> > &outArgs,
+                                    const QString &failureLiteral)
+{
+    return !failureLiteral.isEmpty() && outArgs.size() > 0;
+}
+
+static void writeOutArgUnpack(QTextStream &s, const QString &argName, const AbstractMetaType *type)
+{
+    const QString spelled = type->typeEntry()->qualifiedCppName();
+    s << "                if( _q_" << argName << ".";
+    if (spelled == QLatin1String("QString")) {
+        s << "isString() ) " << argName << " = _q_" << argName << ".toString();" << endl;
+    } else if (spelled == QLatin1String("int")) {
+        s << "isNumber() ) " << argName << " = _q_" << argName << ".toInt32();" << endl;
+    } else if (spelled == QLatin1String("uint")) {
+        s << "isNumber() ) " << argName << " = _q_" << argName << ".toUInt32();" << endl;
+    } else if (spelled == QLatin1String("bool")) {
+        s << "isBool() ) " << argName << " = _q_" << argName << ".toBool();" << endl;
+    } else {
+        s << "isValid() ) " << argName << " = qscriptvalue_cast<";
+        ShellGenerator::writeTypeInfo(s, type, Generator::Option(Generator::SkipName));
+        s << ">(_q_" << argName << ");" << endl;
+    }
+}
+
 QString ShellImplGenerator::fileNameForClass(const AbstractMetaClass *meta_class) const
 {
     return QString("qtscriptshell_%1.cpp").arg(meta_class->name());
@@ -168,12 +219,39 @@ void ShellImplGenerator::write(QTextStream &s, const AbstractMetaClass *meta_cla
                 scriptFunctionName.prepend("_qs_");
             }
         }
+
+        AbstractMetaArgumentList args = fun->arguments();
+
+        // Out-argument recognition: non-const reference to a value or
+        // primitive type (never pointer). Out-args among removed arguments
+        // are not engaged.
+        QList<QPair<QString, AbstractMetaType *> > outArgs;
+        for (int j = 0; j < args.size(); ++j) {
+            if (fun->argumentRemoved(j + 1))
+                continue;
+            AbstractMetaType *at = args.at(j)->type();
+            if (!at || !at->isReference() || at->isConstant() || at->indirections() != 0)
+                continue;
+            const TypeEntry *te = at->typeEntry();
+            if (!te || te->isNamespace())
+                continue;
+            if (!te->isValue() && !te->isPrimitive())
+                continue;
+            outArgs << QPair<QString, AbstractMetaType *>(args.at(j)->argumentName(), at);
+        }
+
+        QString failureLiteral;
+        if (fun->type() && fun->type()->typeEntry() && fun->type()->typeEntry()->isEnum()
+            && fun->type()->indirections() == 0 && !fun->type()->isReference())
+            failureLiteral = enumFailureLiteral((EnumTypeEntry *) fun->type()->typeEntry());
+        bool stringPack = outArgEngagesStringPack(fun, outArgs);
+        bool objectPack = !stringPack && outArgEngagesObjectPack(outArgs, failureLiteral);
+
         s << "    QScriptValue _q_function = __qtscript_self.property(\""
           << scriptFunctionName << "\");" << endl;
         s << "    if (!_q_function.isFunction() || QTSCRIPT_IS_GENERATED_FUNCTION(_q_function)" << endl
           << "        || (__qtscript_self.propertyFlags(\"" << scriptFunctionName << "\") & QScriptValue::QObjectMember)) {" << endl;
 
-        AbstractMetaArgumentList args = fun->arguments();
         s << "        ";
         if (fun->isAbstract()) {
             s << "qFatal(\"" << meta_class->name() << "::" << fun->name()
@@ -193,41 +271,102 @@ void ShellImplGenerator::write(QTextStream &s, const AbstractMetaClass *meta_cla
 
         s << "    } else {" << endl;
 
-        // call the script function
-        if (args.size() > 0)
+        if (stringPack || objectPack) {
+            // Script override with out-argument write-back (fixup/validate
+            // contract). Matches the call layout of the plain branch except
+            // that it captures the result value.
             s << "        QScriptEngine *_q_engine = __qtscript_self.engine();" << endl;
-        s << "        ";
-        if (fun->type()) {
-            s << "return qscriptvalue_cast<";
-            writeTypeInfo(s, fun->type());
-            s << ">(";
-        }
-        s << "_q_function.call(__qtscript_self";
-        if (args.size() > 0) {
-            s << "," << endl;
-            s << "            QScriptValueList()";
-            int i = 0;
+            s << "        QScriptValue _q_result =" << endl;
+            s << "            _q_function.call(__qtscript_self," << endl;
+            int visibleArgs = 0;
             for (int j = 0; j < args.size(); ++j) {
-                if (fun->argumentRemoved(j+1))
+                if (fun->argumentRemoved(j + 1))
                     continue;
-                s << endl << "            << ";
-                s << "qScriptValueFromValue(_q_engine, ";
-                AbstractMetaType *atype = args.at(j)->type();
-                QString asig = atype->cppSignature();
-                bool constCastArg = asig.endsWith('*') && asig.startsWith("const ");
-                if (constCastArg) {
-                    s << "const_cast<" << asig << ">(";
-                }
-                s << args.at(i)->argumentName() << ")";
-                if (constCastArg)
-                    s << ")";
-                ++i;
+                ++visibleArgs;
             }
-        }
-        s << ")";
-        if (fun->type())
+            int written = 0;
+            for (int j = 0; j < args.size(); ++j) {
+                if (fun->argumentRemoved(j + 1))
+                    continue;
+                if (written == 0)
+                    s << "                             QScriptValueList() << qScriptValueFromValue(_q_engine, ";
+                else
+                    s << "                                                << qScriptValueFromValue(_q_engine, ";
+                s << args.at(j)->argumentName() << ")";
+                if (written == visibleArgs - 1)
+                    s << ");" << endl;
+                else
+                    s << endl;
+                ++written;
+            }
+            if (stringPack) {
+                s << "        if( !_q_engine->hasUncaughtException() && _q_result.isString() ) "
+                  << outArgs.first().first << " = _q_result.toString();" << endl;
+            } else {
+                s << "        if( _q_engine->hasUncaughtException() ) return " << failureLiteral << ";" << endl;
+                s << "        if( _q_result.isObject() )" << endl;
+                s << "        {" << endl;
+                s << "            QScriptValue _q_state = _q_result.property(\"state\");" << endl;
+                s << "            if( _q_engine->hasUncaughtException() ) return " << failureLiteral << ";" << endl;
+                s << "            if( _q_state.isValid() )" << endl;
+                s << "            {" << endl;
+                s << "                ";
+                writeTypeInfo(s, fun->type(), Option(SkipName));
+                s << " _q_value = qscriptvalue_cast<";
+                writeTypeInfo(s, fun->type(), Option(SkipName));
+                s << ">(_q_state);" << endl;
+                s << "                if( _q_engine->hasUncaughtException() ) return " << failureLiteral << ";" << endl;
+                for (int j = 0; j < outArgs.size(); ++j) {
+                    s << "                QScriptValue _q_" << outArgs.at(j).first
+                      << " = _q_result.property(\"" << outArgs.at(j).first << "\");" << endl;
+                    s << "                if( _q_engine->hasUncaughtException() ) return " << failureLiteral << ";" << endl;
+                }
+                for (int j = 0; j < outArgs.size(); ++j)
+                    writeOutArgUnpack(s, outArgs.at(j).first, outArgs.at(j).second);
+                s << "                return _q_value;" << endl;
+                s << "            }" << endl;
+                s << "        }" << endl;
+                s << "        return qscriptvalue_cast<";
+                writeTypeInfo(s, fun->type(), Option(SkipName));
+                s << ">(_q_result);" << endl;
+            }
+        } else {
+            // call the script function
+            if (args.size() > 0)
+                s << "        QScriptEngine *_q_engine = __qtscript_self.engine();" << endl;
+            s << "        ";
+            if (fun->type()) {
+                s << "return qscriptvalue_cast<";
+                writeTypeInfo(s, fun->type());
+                s << ">(";
+            }
+            s << "_q_function.call(__qtscript_self";
+            if (args.size() > 0) {
+                s << "," << endl;
+                s << "            QScriptValueList()";
+                int i = 0;
+                for (int j = 0; j < args.size(); ++j) {
+                    if (fun->argumentRemoved(j+1))
+                        continue;
+                    s << endl << "            << ";
+                    s << "qScriptValueFromValue(_q_engine, ";
+                    AbstractMetaType *atype = args.at(j)->type();
+                    QString asig = atype->cppSignature();
+                    bool constCastArg = asig.endsWith('*') && asig.startsWith("const ");
+                    if (constCastArg) {
+                        s << "const_cast<" << asig << ">(";
+                    }
+                    s << args.at(i)->argumentName() << ")";
+                    if (constCastArg)
+                        s << ")";
+                    ++i;
+                }
+            }
             s << ")";
-        s << ";" << endl;
+            if (fun->type())
+                s << ")";
+            s << ";" << endl;
+        }
 
         s << "    }" << endl;
 
