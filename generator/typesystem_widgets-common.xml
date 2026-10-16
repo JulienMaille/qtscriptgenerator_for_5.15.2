@@ -401,7 +401,6 @@
   <interface-type name="QPaintDevice"/>
 
   <interface-type name="QGraphicsItem" delete-in-main-thread="yes">
-    <modify-function signature="setMatrix(QMatrix, bool)" remove="all"/>
     <modify-function signature="toGraphicsObject() const" remove="all" />
 
     <modify-function signature="paint(QPainter*,const QStyleOptionGraphicsItem*,QWidget*)">
@@ -490,10 +489,6 @@
         </modify-argument>
     </modify-function>
 
-    <modify-function signature="matrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-    <modify-function signature="resetMatrix()" remove="all"/> <!--### Obsolete in 4.3-->
-    <modify-function signature="sceneMatrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-    <modify-function signature="setMatrix(QMatrix, bool)" remove="all"/> <!--### Obsolete in 4.3-->
   </interface-type>
 
   <object-type name="QAbstractGraphicsShapeItem" delete-in-main-thread="yes">
@@ -504,10 +499,6 @@
         </inject-code>
     </modify-function>
 
-    <modify-function signature="matrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-    <modify-function signature="resetMatrix()" remove="all"/> <!--### Obsolete in 4.3-->
-    <modify-function signature="sceneMatrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-    <modify-function signature="setMatrix(QMatrix, bool)" remove="all"/> <!--### Obsolete in 4.3-->
   </object-type>
 
   <object-type name="QAbstractItemView">
@@ -663,24 +654,12 @@
     </modify-function>
   </object-type>
   <object-type name="QGraphicsItemGroup" delete-in-main-thread="yes">
-      <modify-function signature="matrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="resetMatrix()" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="sceneMatrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="setMatrix(QMatrix, bool)" remove="all"/> <!--### Obsolete in 4.3-->
   </object-type>
   <object-type name="QGraphicsLineItem" delete-in-main-thread="yes">
-      <modify-function signature="matrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="resetMatrix()" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="sceneMatrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="setMatrix(QMatrix, bool)" remove="all"/> <!--### Obsolete in 4.3-->
   </object-type>
   <object-type name="QGraphicsPathItem" delete-in-main-thread="yes"/>
 
   <object-type name="QGraphicsPixmapItem" delete-in-main-thread="yes">
-      <modify-function signature="matrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="resetMatrix()" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="sceneMatrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="setMatrix(QMatrix, bool)" remove="all"/> <!--### Obsolete in 4.3-->
   </object-type>
   <object-type name="QGraphicsPolygonItem" delete-in-main-thread="yes"/>
   <object-type name="QGraphicsRectItem" delete-in-main-thread="yes"/>
@@ -2065,10 +2044,6 @@
         </modify-argument>
     </modify-function>
 
-      <modify-function signature="matrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="resetMatrix()" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="sceneMatrix()const" remove="all"/> <!--### Obsolete in 4.3-->
-      <modify-function signature="setMatrix(QMatrix, bool)" remove="all"/> <!--### Obsolete in 4.3-->
  </object-type>
 
   <object-type name="QCompleter">
