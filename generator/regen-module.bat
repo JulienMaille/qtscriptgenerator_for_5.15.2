@@ -8,8 +8,8 @@ if "%MOD%"=="" (
   echo Usage: regen-module.bat ^<module^>
   exit /b 2
 )
-set QTDIR=D:\Qt\6.8.3\msvc2022_64
+if "%QTDIR%"=="" set QTDIR=D:\Qt\6.8.3\msvc2022_64
 set PATH=%QTDIR%\bin;%PATH%
-cd /d D:\Codez\qtscriptgenerator_for_5.15.2\generator
-release\generator.exe qtscript_masterinclude_qt6.h build_%MOD%.txt --output-directory=D:\Codez\qtscriptgenerator_for_5.15.2\regen-test || exit /b 1
+cd /d %~dp0
+release\generator.exe qtscript_masterinclude_qt6.h build_%MOD%.txt --output-directory=%~dp0..\regen-test || exit /b 1
 endlocal

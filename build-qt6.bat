@@ -1,4 +1,5 @@
 @echo off
-call "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=amd64 >NUL 2>&1
-cd /d D:\Codez\qtscriptgenerator_for_5.15.2\generator
+if "%VSDEVCMD%"=="" for /f "delims=" %%v in ('"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath') do set "VSDEVCMD=%%v\Common7\Tools\VsDevCmd.bat"
+call "%VSDEVCMD%" -arch=amd64 >NUL 2>&1
+cd /d %~dp0generator
 nmake %*

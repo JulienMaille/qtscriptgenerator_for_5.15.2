@@ -13,9 +13,13 @@
 #
 # The .pri is rewritten on every regen run, so this must run after each
 # printsupport regen and before the DLL build.
+param(
+    [string] $ForgeRoot = (Split-Path $PSScriptRoot -Parent),
+    [string] $BindingsRoot = (Join-Path (Split-Path $ForgeRoot -Parent) 'qtscriptgenerator-qt6-bindings')
+)
 $ErrorActionPreference = 'Stop'
-$regenDir = 'D:\Codez\qtscriptgenerator_for_5.15.2\regen-test\generated_cpp\com_trolltech_qt_printsupport'
-$curatedDir = 'D:\Codez\qtscriptgenerator-qt6-bindings\generated_cpp\com_trolltech_qt_printsupport'
+$regenDir = Join-Path $ForgeRoot 'regen-test\generated_cpp\com_trolltech_qt_printsupport'
+$curatedDir = Join-Path $BindingsRoot 'generated_cpp\com_trolltech_qt_printsupport'
 
 if (-not (Test-Path $regenDir)) { throw "regen output missing: $regenDir" }
 if (-not (Test-Path $curatedDir)) { throw "curated output missing: $curatedDir" }

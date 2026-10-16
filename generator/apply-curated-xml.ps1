@@ -21,9 +21,13 @@
 #                                    namespace.
 # The .pri is rewritten from scratch on each regen run, so this must run
 # after each xml regen and before the DLL build.
+param(
+    [string] $ForgeRoot = (Split-Path $PSScriptRoot -Parent),
+    [string] $BindingsRoot = (Join-Path (Split-Path $ForgeRoot -Parent) 'qtscriptgenerator-qt6-bindings')
+)
 $ErrorActionPreference = 'Stop'
-$xmlDir = 'D:\Codez\qtscriptgenerator_for_5.15.2\regen-test\generated_cpp\com_trolltech_qt_xml'
-$curatedDir = 'D:\Codez\qtscriptgenerator-qt6-bindings\generated_cpp\com_trolltech_qt_xml'
+$xmlDir = Join-Path $ForgeRoot 'regen-test\generated_cpp\com_trolltech_qt_xml'
+$curatedDir = Join-Path $BindingsRoot 'generated_cpp\com_trolltech_qt_xml'
 
 # 1. Curated sources (tracked in the bindings repo).
 $curated = @(

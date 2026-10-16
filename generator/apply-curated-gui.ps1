@@ -3,10 +3,14 @@
 # these because their Qt 6 C++ sources are gone (QMatrix) or need compat
 # shims; the .pri/_init.cpp below are regenerated from scratch on every
 # regen run, so this must run after each GUI regen, before the DLL build.
+param(
+    [string] $ForgeRoot = (Split-Path $PSScriptRoot -Parent),
+    [string] $BindingsRoot = (Join-Path (Split-Path $ForgeRoot -Parent) 'qtscriptgenerator-qt6-bindings')
+)
 $ErrorActionPreference = 'Stop'
-$guiDir = 'D:\Codez\qtscriptgenerator_for_5.15.2\regen-test\generated_cpp\com_trolltech_qt_gui'
-$guiInclude = 'D:\Codez\qtscriptgenerator_for_5.15.2\regen-test\qtbindings\qtscript_gui\include'
-$curatedDir = 'D:\Codez\qtscriptgenerator-qt6-bindings\generated_cpp\com_trolltech_qt_gui'
+$guiDir = Join-Path $ForgeRoot 'regen-test\generated_cpp\com_trolltech_qt_gui'
+$guiInclude = Join-Path $ForgeRoot 'regen-test\qtbindings\qtscript_gui\include'
+$curatedDir = Join-Path $BindingsRoot 'generated_cpp\com_trolltech_qt_gui'
 
 # 1. Curated sources (tracked in the bindings repo).
 foreach ($f in @('qtscript_QMatrix.cpp')) {

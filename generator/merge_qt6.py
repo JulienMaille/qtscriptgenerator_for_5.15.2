@@ -4,7 +4,7 @@ import pathlib
 
 from lxml import etree
 
-ROOT = pathlib.Path(r"D:\Codez\qtscriptgenerator_for_5.15.2\generator")
+ROOT = pathlib.Path(__file__).resolve().parent
 OUTDIR = ROOT / "merged"
 MODULES = [
     "core", "gui", "widgets", "multimedia", "printsupport", "svg",

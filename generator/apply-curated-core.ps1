@@ -9,11 +9,15 @@
 # layer) and re-attached after every core regen, before the DLL build. The
 # .pri and _init.cpp are rewritten from scratch on each regen run, so this
 # must run after each core regen.
+param(
+    [string] $ForgeRoot = (Split-Path $PSScriptRoot -Parent),
+    [string] $BindingsRoot = (Join-Path (Split-Path $ForgeRoot -Parent) 'qtscriptgenerator-qt6-bindings')
+)
 $ErrorActionPreference = 'Stop'
-$coreDir = 'D:\Codez\qtscriptgenerator_for_5.15.2\regen-test\generated_cpp\com_trolltech_qt_core'
-$coreInclude = 'D:\Codez\qtscriptgenerator_for_5.15.2\regen-test\qtbindings\qtscript_core\include'
-$curatedDir = 'D:\Codez\qtscriptgenerator-qt6-bindings\generated_cpp\com_trolltech_qt_core'
-$bindingsInclude = 'D:\Codez\qtscriptgenerator-qt6-bindings\qtbindings\include'
+$coreDir = Join-Path $ForgeRoot 'regen-test\generated_cpp\com_trolltech_qt_core'
+$coreInclude = Join-Path $ForgeRoot 'regen-test\qtbindings\qtscript_core\include'
+$curatedDir = Join-Path $BindingsRoot 'generated_cpp\com_trolltech_qt_core'
+$bindingsInclude = Join-Path $BindingsRoot 'qtbindings\include'
 
 # 1. Curated sources (tracked in the bindings repo).
 foreach ($f in @('qtscript_QStringConverter.cpp', 'qtscript_QRegExp.cpp')) {
