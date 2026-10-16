@@ -514,6 +514,9 @@
        JavaScript RegExp values, converted at the call site. -->
   <value-type name="QRegularExpression" generate="no">
     <include file-name="QRegularExpression" location="global"/>
+    <!-- The emitter builds QRegularExpression locals from QtScript's QRegExp
+         compat object (native JS RegExp values convert through it). -->
+    <include file-name="QtScript/QRegExp" location="global"/>
   </value-type>
 
   <enum-type name="QDate::MonthNameType"/>

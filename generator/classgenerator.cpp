@@ -458,9 +458,15 @@ static int writePrepareArguments(QTextStream &stream, const AbstractMetaFunction
                 continue;
             }
             // QRegularExpression has no script metatype converter; build it
-            // from a native JavaScript RegExp at the call site.
+            // from a native JavaScript RegExp at the call site (QtScript's
+            // QRegExp compat object converts pattern + case sensitivity).
             if (typeName == QLatin1String("QRegularExpression")) {
-                stream << indentStr << "QRegularExpression " << actualOut << " = " << actualIn << ".toRegExp();" << endl;
+                stream << indentStr << "QRegExp " << actualOut << "_rx = " << actualIn << ".toRegExp();" << endl;
+                stream << indentStr << "QRegularExpression::PatternOptions " << actualOut << "_rxopts;" << endl;
+                stream << indentStr << "if (" << actualOut << "_rx.caseSensitivity() == Qt::CaseInsensitive)" << endl;
+                stream << indentStr << "    " << actualOut << "_rxopts |= QRegularExpression::CaseInsensitiveOption;" << endl;
+                stream << indentStr << "QRegularExpression " << actualOut << "(" << actualOut << "_rx.pattern(), "
+                       << actualOut << "_rxopts);" << endl;
                 if (!fun->argumentRemoved(j+1))
                     ++scriptArgIndex;
                 continue;
