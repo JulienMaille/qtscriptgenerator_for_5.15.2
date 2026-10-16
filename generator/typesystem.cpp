@@ -1416,10 +1416,6 @@ TypeDatabase::TypeDatabase() : m_suppressWarnings(true)
     e->setPreferredConversion(false);
     addType(e);
 
-    e = new StringTypeEntry("QStringRef");
-    e->setPreferredConversion(false);
-    addType(e);
-
     e = new StringTypeEntry("QXmlStreamStringRef");
     e->setPreferredConversion(false);
     addType(e);
@@ -1448,7 +1444,6 @@ TypeDatabase::TypeDatabase() : m_suppressWarnings(true)
     // Predefined containers...
     addType(new ContainerTypeEntry("QList", ContainerTypeEntry::ListContainer));
     addType(new ContainerTypeEntry("QStringList", ContainerTypeEntry::StringListContainer));
-    addType(new ContainerTypeEntry("QLinkedList", ContainerTypeEntry::LinkedListContainer));
     addType(new ContainerTypeEntry("QVector", ContainerTypeEntry::VectorContainer));
     addType(new ContainerTypeEntry("QStack", ContainerTypeEntry::StackContainer));
     addType(new ContainerTypeEntry("QSet", ContainerTypeEntry::SetContainer));
