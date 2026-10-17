@@ -336,7 +336,8 @@ static const QtBindingCreator qtscript_com_trolltech_qt_gui_class_functions[] = 
 void qtscript_initialize_com_trolltech_qt_gui_bindings(QScriptValue &extensionObject)
 {
     QScriptEngine *engine = extensionObject.engine();
-    for (int i = 0; i < 109; ++i) {
+    for (int i = 0; i < int(sizeof(qtscript_com_trolltech_qt_gui_class_names)
+                            / sizeof(qtscript_com_trolltech_qt_gui_class_names[0])); ++i) {
         extensionObject.setProperty(qtscript_com_trolltech_qt_gui_class_names[i],
             qtscript_com_trolltech_qt_gui_class_functions[i](engine),
             QScriptValue::SkipInEnumeration);

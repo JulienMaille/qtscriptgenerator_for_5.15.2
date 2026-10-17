@@ -221,7 +221,9 @@ void SetupGenerator::generate()
             s << "    qtscript_" << packName << "_FakePrototype *fakeProtoClass;" << endl
               << "    fakeProtoClass = new qtscript_" << packName << "_FakePrototype(engine);" << endl;
 #endif
-            s << "    for (int i = 0; i < " << list.size() << "; ++i) {" << endl
+            s << "    for (int i = 0; i < int(sizeof(qtscript_" << packName
+              << "_class_names) / sizeof(qtscript_" << packName
+              << "_class_names[0])); ++i) {" << endl
 #ifndef Q_SCRIPT_LAZY_GENERATOR
               << "        extensionObject.setProperty(qtscript_" << packName << "_class_names[i]," << endl
               << "            qtscript_" << packName << "_class_functions[i](engine)," << endl

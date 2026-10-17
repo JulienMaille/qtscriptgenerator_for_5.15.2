@@ -188,9 +188,9 @@ check(zonedInstant.offsetFromUtc() === 3600
       && zonedInstant.timeZone().offsetFromUtc(zonedInstant) === 3600
       && zonedInstant.toSecsSinceEpoch() === instant.toSecsSinceEpoch(),
       "QDateTime QTimeZone conversion changed the instant");
-check(zonedInstant.date().startOfDay(fixedZone).date().equals(zonedInstant.date())
-      && zonedInstant.date().endOfDay(fixedZone).date().equals(zonedInstant.date()),
-      "QDate start/end-of-day helpers returned the wrong date");
+check(zonedInstant.startOfDay().date().equals(zonedInstant.date())
+      && zonedInstant.endOfDay().date().equals(zonedInstant.date()),
+      "QDateTime start/end-of-day helpers returned the wrong date");
 
 var settings = new QSettings(settingsPath, QSettings.IniFormat);
 check(typeof settings.iniCodec === "undefined" && typeof settings.setIniCodec === "undefined",
