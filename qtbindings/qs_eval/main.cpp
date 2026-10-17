@@ -39,14 +39,17 @@
 **
 ****************************************************************************/
 
-
-#include <QtScript>
-#if QT_VERSION >= 0x040500
-#include <QtScriptTools>
-#endif
+#include <QtScript/QScriptContext>
+#include <QtScript/QScriptEngine>
+#include <QtScript/QScriptValue>
+#include <QtScript/QScriptValueIterator>
+#include <QtScriptTools/QScriptEngineDebugger>
+#include <QtCore/QDir>
 #include <QtCore/QFile>
+#include <QtCore/QString>
 #include <QtCore/QTextStream>
 #include <QtCore/QStringList>
+#include <QtCore/QtGlobal>
 #include <QApplication>
 
 #include <stdlib.h>
@@ -156,6 +159,17 @@ int main(int argc, char *argv[])
     QStringList extensions;
     extensions << "qt.core"
                << "qt.gui"
+               << "qt.network"
+               << "qt.sql"
+               << "qt.widgets"
+               << "qt.printsupport"
+               << "qt.uitools"
+               << "qt.xml"
+               << "qt.svg"
+               << "qt.svgwidgets";
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    extensions
+               << "qt.gui"
                << "qt.widgets"
                << "qt.printsupport"
                << "qt.xml"
@@ -163,10 +177,9 @@ int main(int argc, char *argv[])
                << "qt.network"
                << "qt.sql"
                << "qt.opengl"
-               << "qt.webkit"
-               << "qt.webkitwidgets"
                << "qt.xmlpatterns"
                << "qt.uitools";
+#endif
     QStringList failExtensions;
     foreach (const QString &ext, extensions) {
         QScriptValue ret = eng->importExtension(ext);
@@ -190,28 +203,8 @@ int main(int argc, char *argv[])
         }
     }
 
-#if QT_VERSION >= 0x040500
-    QScriptEngineDebugger *dbg = 0;
-    // Unattended runs (batch demo testing) set QSEVAL_NO_DEBUGGER to bypass
-    // the interactive debugger, so uncaught exceptions fall through to the
-    // "print + EXIT_FAILURE" handling below instead of suspending the process.
-    if (qEnvironmentVariableIsEmpty("QSEVAL_NO_DEBUGGER")) {
-        dbg = new QScriptEngineDebugger();
-        dbg->attachTo(eng);
-    }
-#endif
-
-    // QSEVAL_FAILFAST: report exceptions thrown inside event-loop-invoked
-    // script functions (signal handlers, animation callbacks) and stop.
-    if (!qEnvironmentVariableIsEmpty("QSEVAL_FAILFAST")) {
-        QObject::connect(eng, &QScriptEngine::signalHandlerException,
-                         app, [app](const QScriptValue &exc) {
-            fprintf(stderr, "JS exception in event handler: %s\n",
-                    qPrintable(exc.toString()));
-            fflush(stderr);
-            app->exit(2);
-        }, Qt::DirectConnection);
-    }
+    QScriptEngineDebugger *dbg = new QScriptEngineDebugger();
+    dbg->setAutoShowStandardWindow(false);
 
     QScriptValue globalObject = eng->globalObject();
     globalObject.setProperty("qApp", eng->newQObject(app));
@@ -232,6 +225,27 @@ int main(int argc, char *argv[])
         if (fn == QLatin1String("-i")) {
             interactive(eng);
             break;
+        }
+
+        if (fn == QLatin1String("--scripttools-smoke")) {
+            dbg->attachTo(eng);
+            const QScriptValue smokeResult = eng->evaluate(
+                QLatin1String("(function(a, b) { return a + b; })(19, 23)"),
+                QLatin1String("scripttools-smoke"));
+            if (!dbg->action(QScriptEngineDebugger::ContinueAction)
+                || !dbg->widget(QScriptEngineDebugger::ConsoleWidget)
+                || eng->hasUncaughtException()
+                || !smokeResult.isNumber()
+                || smokeResult.toInt32() != 42) {
+                fprintf(stderr, "QtScriptTools debugger smoke test failed\n");
+                dbg->detach();
+                delete dbg;
+                delete eng;
+                delete app;
+                return EXIT_FAILURE;
+            }
+            dbg->detach();
+            continue;
         }
 
         QString contents;
@@ -262,7 +276,13 @@ int main(int argc, char *argv[])
             continue;
 
         QScriptValue r = eng->evaluate(contents, fn, lineNumber);
-        if (eng->hasUncaughtException()) {
+        // NOTE (Qt6 port): check the completion value, not
+        // hasUncaughtException(). Caught native throwError calls can leave
+        // the engine's uncaught-exception flag stale-true (with an undefined
+        // exception value) even after script catch handles them -- verified
+        // with untouched oracle DLLs, so this is engine-level. r.isError()
+        // is true exactly when evaluation really ended with an error.
+        if (r.isError()) {
             QStringList backtrace = eng->uncaughtExceptionBacktrace();
             fprintf (stderr, "    %s\n%s\n\n", qPrintable(r.toString()),
                      qPrintable(backtrace.join("\n")));
@@ -270,10 +290,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    delete eng;
-#if QT_VERSION >= 0x040500
+    dbg->detach();
     delete dbg;
-#endif    delete app;
+    delete eng;
+    delete app;
 
     return EXIT_SUCCESS;
 }

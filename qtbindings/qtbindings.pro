@@ -19,4 +19,3 @@ qtscript_printsupport.depends = qtscript_core qtscript_gui qtscript_widgets
 qtscript_uitools.depends = qtscript_core qtscript_widgets
 qtscript_svg.depends = qtscript_core qtscript_gui qtscript_widgets
 qs_eval.depends = qtscript_core qtscript_gui qtscript_network qtscript_sql qtscript_xml qtscript_widgets qtscript_printsupport qtscript_uitools qtscript_svg
-
