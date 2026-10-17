@@ -2,7 +2,9 @@ name: Windows Qt 6.8 LTS
 
 on:
   push:
-    branches: [main]
+    # qt6 is the branch that carries the Qt 6 port: the generator build, the
+    # regeneration and the binding tests must run on every push to it.
+    branches: [main, qt6]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -59,6 +61,24 @@ jobs:
           -Configuration Release
           -Parallel 4
 
+      - name: Build generator
+        shell: pwsh
+        run: .\generator\build-generator.ps1 -QtPrefix $env:QT_ROOT_DIR -Configuration Release
+
+      - name: Generate the binding projects
+        shell: pwsh
+        # The generator produces the nine binding projects on every run: no
+        # generated_cpp/ is tracked any more, so the build consumes what this
+        # step just generated. The curated pass re-attaches the
+        # hand-maintained, non-generatable sources of generator/curated/
+        # before the projects are published where CMake reads them.
+        run: >-
+          .\generator\regen-all.ps1
+          -QtPrefix $env:QT_ROOT_DIR
+          -OutputRoot ${env:GITHUB_WORKSPACE}\regen-test
+          -ApplyCurated
+          -PublishRoot $env:GITHUB_WORKSPACE
+
       - name: Build bindings
         shell: pwsh
         run: .\build.ps1 -QtPrefix $env:QT_ROOT_DIR -Configuration Release
@@ -74,5 +94,15 @@ jobs:
           path: |
             plugins/script/*.dll
             qtbindings/qs_eval/release/qs_eval.exe
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload generated projects
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: qtscriptgenerator-qt${{ env.QT_VERSION }}-generated-cpp
+          path: |
+            generated_cpp/**
+            regen-test/qtbindings/**
           if-no-files-found: error
           retention-days: 3

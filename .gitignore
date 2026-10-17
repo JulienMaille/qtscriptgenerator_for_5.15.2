@@ -21,6 +21,9 @@ qtbindings/*/moc_*.cpp
 /generator/Makefile.qt6
 /generator/Makefile.qt6.Debug
 /generator/Makefile.qt6.Release
+/generator/Makefile.dbg
+/generator/Makefile.dbg.Debug
+/generator/Makefile.dbg.Release
 /generator/merged/
 /generator/release/
 .qmake.stash
@@ -50,4 +53,10 @@ _pkg/
 # parser repro fixture output
 generator/_ptest/out/
 generator/_ptest/nondet.txt
+
+# The nine binding projects are produced by the generator on every build
+# (generator/regen-all.ps1) and published where CMake reads them; they are
+# build output, never committed. generator/curated/ holds the hand-maintained
+# sources that are re-attached to the fresh output.
+/generated_cpp/
 /regen-test/

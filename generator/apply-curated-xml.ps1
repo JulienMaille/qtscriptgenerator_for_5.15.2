@@ -2,8 +2,8 @@
 # QtXml bindings in the fresh generator output.
 #
 # Qt 6 dropped the SAX classes and moved the DOM parse API around. The
-# bindings repo carries the hand-maintained pieces the generator cannot
-# produce on its own:
+# hand-maintained pieces the generator cannot produce on its own live in
+# generator/curated/:
 #   - qtscript_QtXml.cpp           : the QtXml namespace object and the
 #                                    QDomDocument::ParseOption/ParseOptions
 #                                    surface;
@@ -23,13 +23,17 @@
 # after each xml regen and before the DLL build.
 param(
     [string] $ForgeRoot = (Split-Path $PSScriptRoot -Parent),
-    [string] $BindingsRoot = (Join-Path (Split-Path $ForgeRoot -Parent) 'qtscriptgenerator-qt6-bindings')
+    [string] $RegenRoot = (Join-Path (Split-Path $PSScriptRoot -Parent) 'regen-test'),
+    [string] $CuratedRoot = (Join-Path $PSScriptRoot 'curated')
 )
 $ErrorActionPreference = 'Stop'
-$xmlDir = Join-Path $ForgeRoot 'regen-test\generated_cpp\com_trolltech_qt_xml'
-$curatedDir = Join-Path $BindingsRoot 'generated_cpp\com_trolltech_qt_xml'
+$xmlDir = Join-Path $RegenRoot 'generated_cpp\com_trolltech_qt_xml'
+$curatedDir = Join-Path $CuratedRoot 'com_trolltech_qt_xml'
 
-# 1. Curated sources (tracked in the bindings repo).
+if (-not (Test-Path $xmlDir)) { throw "regen output missing: $xmlDir" }
+if (-not (Test-Path $curatedDir)) { throw "curated output missing: $curatedDir" }
+
+# 1. Curated sources (tracked in this repository).
 $curated = @(
   'qtscript_QtXml.cpp',
   'qtscript_QDomDocument.cpp',
@@ -37,8 +41,10 @@ $curated = @(
   'com_trolltech_qt_xml_init.cpp'
 )
 foreach ($f in $curated) {
+  $source = Join-Path $curatedDir $f
+  if (-not (Test-Path $source)) { throw "curated file missing: $source" }
   $dest = Join-Path $xmlDir $f
-  Copy-Item (Join-Path $curatedDir $f) $dest -Force
+  Copy-Item $source $dest -Force
   # The repo copies keep the source timestamp, which can be older than the
   # object file nmake already built; touch them so nmake recompiles.
   (Get-Item $dest).LastWriteTime = Get-Date

@@ -5,7 +5,8 @@
 # the QGraphicsItem prototype (so inherited view methods like boundingRect
 # resolve) while carrying the QGraphicsObject pointer for its own methods.
 # The fork's generator only chains to the direct C++ base (QGraphicsObject),
-# hiding the item API. The hand-maintained files keep the product shape:
+# hiding the item API. The hand-maintained files, kept in generator/curated/,
+# preserve the product shape:
 #   - qtscript_QtSvg.cpp            : the QtSvg namespace object plus the QSvg
 #                                     alias, with QtSvg::Option/Options;
 #   - qtscript_QSvgGenerator.cpp     : the SvgVersion constructor and version
@@ -21,11 +22,12 @@
 # regen and before the DLL build.
 param(
     [string] $ForgeRoot = (Split-Path $PSScriptRoot -Parent),
-    [string] $BindingsRoot = (Join-Path (Split-Path $ForgeRoot -Parent) 'qtscriptgenerator-qt6-bindings')
+    [string] $RegenRoot = (Join-Path (Split-Path $PSScriptRoot -Parent) 'regen-test'),
+    [string] $CuratedRoot = (Join-Path $PSScriptRoot 'curated')
 )
 $ErrorActionPreference = 'Stop'
-$regenDir = Join-Path $ForgeRoot 'regen-test\generated_cpp\com_trolltech_qt_svg'
-$curatedDir = Join-Path $BindingsRoot 'generated_cpp\com_trolltech_qt_svg'
+$regenDir = Join-Path $RegenRoot 'generated_cpp\com_trolltech_qt_svg'
+$curatedDir = Join-Path $CuratedRoot 'com_trolltech_qt_svg'
 
 if (-not (Test-Path $regenDir)) { throw "regen output missing: $regenDir" }
 if (-not (Test-Path $curatedDir)) { throw "curated output missing: $curatedDir" }

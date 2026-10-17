@@ -9,17 +9,18 @@
 # QPageLayout) and QPrinter derives from QPagedPaintDevice, so the generated
 # class loses both the synthetic Orientation enum and the QPaintDevice*
 # conversion that QPainter::begin(printer) needs. The hand-maintained file
-# keeps them. Copy it over the freshly generated tree.
+# lives in generator/curated/ and keeps them.
 #
 # The .pri is rewritten on every regen run, so this must run after each
 # printsupport regen and before the DLL build.
 param(
     [string] $ForgeRoot = (Split-Path $PSScriptRoot -Parent),
-    [string] $BindingsRoot = (Join-Path (Split-Path $ForgeRoot -Parent) 'qtscriptgenerator-qt6-bindings')
+    [string] $RegenRoot = (Join-Path (Split-Path $PSScriptRoot -Parent) 'regen-test'),
+    [string] $CuratedRoot = (Join-Path $PSScriptRoot 'curated')
 )
 $ErrorActionPreference = 'Stop'
-$regenDir = Join-Path $ForgeRoot 'regen-test\generated_cpp\com_trolltech_qt_printsupport'
-$curatedDir = Join-Path $BindingsRoot 'generated_cpp\com_trolltech_qt_printsupport'
+$regenDir = Join-Path $RegenRoot 'generated_cpp\com_trolltech_qt_printsupport'
+$curatedDir = Join-Path $CuratedRoot 'com_trolltech_qt_printsupport'
 
 if (-not (Test-Path $regenDir)) { throw "regen output missing: $regenDir" }
 if (-not (Test-Path $curatedDir)) { throw "curated output missing: $curatedDir" }

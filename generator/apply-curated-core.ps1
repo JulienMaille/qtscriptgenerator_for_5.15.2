@@ -3,24 +3,27 @@
 #
 # QStringConverter is generated as an abstract class, while the shipped
 # product exposes it as a namespace object holding only the Encoding enum.
-# It is hand-carried here (the bindings repo owns the curated layer) and
-# re-attached after every core regen, before the DLL build. The .pri and
-# _init.cpp are rewritten from scratch on each regen run, so this must run
-# after each core regen.
+# The curated file lives in generator/curated/, in this repository, so a regen
+# plus curated pass reproduces the shipped core bindings without any other
+# checkout. The .pri and _init.cpp are rewritten from scratch on each regen
+# run, so this must run after each core regen and before the DLL build.
 param(
     [string] $ForgeRoot = (Split-Path $PSScriptRoot -Parent),
-    [string] $BindingsRoot = (Join-Path (Split-Path $ForgeRoot -Parent) 'qtscriptgenerator-qt6-bindings')
+    [string] $RegenRoot = (Join-Path (Split-Path $PSScriptRoot -Parent) 'regen-test'),
+    [string] $CuratedRoot = (Join-Path $PSScriptRoot 'curated')
 )
 $ErrorActionPreference = 'Stop'
-$coreDir = Join-Path $ForgeRoot 'regen-test\generated_cpp\com_trolltech_qt_core'
-$coreInclude = Join-Path $ForgeRoot 'regen-test\qtbindings\qtscript_core\include'
-$curatedDir = Join-Path $BindingsRoot 'generated_cpp\com_trolltech_qt_core'
-$bindingsInclude = Join-Path $BindingsRoot 'qtbindings\include'
+$coreDir = Join-Path $RegenRoot 'generated_cpp\com_trolltech_qt_core'
+$curatedDir = Join-Path $CuratedRoot 'com_trolltech_qt_core'
 
-# 1. Curated sources (tracked in the bindings repo).
+if (-not (Test-Path $coreDir)) { throw "regen output missing: $coreDir" }
+
+# 1. Curated sources (tracked in this repository).
 foreach ($f in @('qtscript_QStringConverter.cpp')) {
+  $source = Join-Path $curatedDir $f
+  if (-not (Test-Path $source)) { throw "curated file missing: $source" }
   $dest = Join-Path $coreDir $f
-  Copy-Item (Join-Path $curatedDir $f) $dest -Force
+  Copy-Item $source $dest -Force
   # Copy-Item keeps the source timestamp, which may be older than the object
   # file nmake built on the previous run; touch so the TU is recompiled.
   (Get-Item $dest).LastWriteTime = Get-Date
