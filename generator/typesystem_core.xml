@@ -800,6 +800,28 @@
   </value-type>
   <value-type name="QJsonObject">
     <modify-function signature="operator=(QJsonObject)" remove="all"/>
+    <!-- Qt 6 QJsonObject::insert() yields an unbound iterator; expose a
+         discard-return wrapper as the script insert(key, value). -->
+    <inject-code class="native" position="prototype-initialization">
+    {
+        QScriptValue insertFun = engine-&gt;newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -&gt; QScriptValue {
+                QJsonObject *self = qscriptvalue_cast&lt;QJsonObject*&gt;(ctx-&gt;thisObject());
+                if (!self)
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QJsonObject.insert(): expected a QJsonObject"));
+                if (ctx-&gt;argumentCount() != 2 || !(ctx-&gt;argument(0).isString()))
+                    return ctx-&gt;throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QJsonObject.insert(): expected a key string and a QJsonValue"));
+                const QString key = ctx-&gt;argument(0).toString();
+                QJsonValue value = qscriptvalue_cast&lt;QJsonValue&gt;(ctx-&gt;argument(1));
+                self-&gt;insert(key, value);
+                return eng-&gt;undefinedValue();
+            }, 2);
+        proto.setProperty(QString::fromLatin1("insert"), insertFun,
+            QScriptValue::SkipInEnumeration);
+    }
+    </inject-code>
   </value-type>
   <value-type name="QJsonArray">
     <modify-function signature="operator=(QJsonArray)" remove="all"/>

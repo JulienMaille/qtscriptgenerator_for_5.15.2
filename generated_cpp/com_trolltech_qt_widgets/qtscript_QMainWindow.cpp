@@ -323,6 +323,8 @@ static void qtscript_QMainWindow_DockOptions_fromScriptValue(const QScriptValue 
         out = qvariant_cast<QMainWindow::DockOptions>(var);
     else if (var.userType() == qMetaTypeId<QMainWindow::DockOption>())
         out = qvariant_cast<QMainWindow::DockOption>(var);
+    else if (value.isNumber())
+        out = static_cast<QMainWindow::DockOptions>(value.toInt32());
     else
         out = {};
 }

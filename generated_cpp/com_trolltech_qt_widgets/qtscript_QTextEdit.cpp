@@ -505,6 +505,8 @@ static void qtscript_QTextEdit_AutoFormatting_fromScriptValue(const QScriptValue
         out = qvariant_cast<QTextEdit::AutoFormatting>(var);
     else if (var.userType() == qMetaTypeId<QTextEdit::AutoFormattingFlag>())
         out = qvariant_cast<QTextEdit::AutoFormattingFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QTextEdit::AutoFormatting>(value.toInt32());
     else
         out = {};
 }

@@ -665,6 +665,8 @@ static void qtscript_QFileDialog_Options_fromScriptValue(const QScriptValue &val
         out = qvariant_cast<QFileDialog::Options>(var);
     else if (var.userType() == qMetaTypeId<QFileDialog::Option>())
         out = qvariant_cast<QFileDialog::Option>(var);
+    else if (value.isNumber())
+        out = static_cast<QFileDialog::Options>(value.toInt32());
     else
         out = {};
 }

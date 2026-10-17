@@ -174,6 +174,8 @@ static void qtscript_QPinchGesture_ChangeFlags_fromScriptValue(const QScriptValu
         out = qvariant_cast<QPinchGesture::ChangeFlags>(var);
     else if (var.userType() == qMetaTypeId<QPinchGesture::ChangeFlag>())
         out = qvariant_cast<QPinchGesture::ChangeFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QPinchGesture::ChangeFlags>(value.toInt32());
     else
         out = {};
 }

@@ -269,6 +269,8 @@ static void qtscript_QIODevice_OpenMode_fromScriptValue(const QScriptValue &valu
         out = qvariant_cast<QIODevice::OpenMode>(var);
     else if (var.userType() == qMetaTypeId<QIODevice::OpenModeFlag>())
         out = qvariant_cast<QIODevice::OpenModeFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QIODevice::OpenMode>(value.toInt32());
     else
         out = {};
 }

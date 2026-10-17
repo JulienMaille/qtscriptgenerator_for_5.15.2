@@ -241,6 +241,8 @@ static void qtscript_QColorDialog_ColorDialogOptions_fromScriptValue(const QScri
         out = qvariant_cast<QColorDialog::ColorDialogOptions>(var);
     else if (var.userType() == qMetaTypeId<QColorDialog::ColorDialogOption>())
         out = qvariant_cast<QColorDialog::ColorDialogOption>(var);
+    else if (value.isNumber())
+        out = static_cast<QColorDialog::ColorDialogOptions>(value.toInt32());
     else
         out = {};
 }

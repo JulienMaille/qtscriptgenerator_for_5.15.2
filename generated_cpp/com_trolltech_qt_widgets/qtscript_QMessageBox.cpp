@@ -319,6 +319,8 @@ static void qtscript_QMessageBox_StandardButtons_fromScriptValue(const QScriptVa
         out = qvariant_cast<QMessageBox::StandardButtons>(var);
     else if (var.userType() == qMetaTypeId<QMessageBox::StandardButton>())
         out = qvariant_cast<QMessageBox::StandardButton>(var);
+    else if (value.isNumber())
+        out = static_cast<QMessageBox::StandardButtons>(value.toInt32());
     else
         out = {};
 }

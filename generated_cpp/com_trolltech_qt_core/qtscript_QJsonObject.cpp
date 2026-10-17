@@ -358,6 +358,25 @@ QScriptValue qtscript_create_QJsonObject_class(QScriptEngine *engine)
             fun, QScriptValue::SkipInEnumeration);
     }
 
+    {
+        QScriptValue insertFun = engine->newFunction(
+            [](QScriptContext *ctx, QScriptEngine *eng) -> QScriptValue {
+                QJsonObject *self = qscriptvalue_cast<QJsonObject*>(ctx->thisObject());
+                if (!self)
+                    return ctx->throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QJsonObject.insert(): expected a QJsonObject"));
+                if (ctx->argumentCount() != 2 || !(ctx->argument(0).isString()))
+                    return ctx->throwError(QScriptContext::TypeError,
+                        QString::fromLatin1("QJsonObject.insert(): expected a key string and a QJsonValue"));
+                const QString key = ctx->argument(0).toString();
+                QJsonValue value = qscriptvalue_cast<QJsonValue>(ctx->argument(1));
+                self->insert(key, value);
+                return eng->undefinedValue();
+            }, 2);
+        proto.setProperty(QString::fromLatin1("insert"), insertFun,
+            QScriptValue::SkipInEnumeration);
+    }
+
     engine->setDefaultPrototype(qMetaTypeId<QJsonObject>(), proto);
     engine->setDefaultPrototype(qMetaTypeId<QJsonObject*>(), proto);
 

@@ -247,6 +247,8 @@ static void qtscript_QNetworkProxy_Capabilities_fromScriptValue(const QScriptVal
         out = qvariant_cast<QNetworkProxy::Capabilities>(var);
     else if (var.userType() == qMetaTypeId<QNetworkProxy::Capability>())
         out = qvariant_cast<QNetworkProxy::Capability>(var);
+    else if (value.isNumber())
+        out = static_cast<QNetworkProxy::Capabilities>(value.toInt32());
     else
         out = {};
 }

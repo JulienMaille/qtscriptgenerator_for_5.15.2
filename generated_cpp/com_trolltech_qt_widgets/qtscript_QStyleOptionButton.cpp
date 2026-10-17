@@ -246,6 +246,8 @@ static void qtscript_QStyleOptionButton_ButtonFeatures_fromScriptValue(const QSc
         out = qvariant_cast<QStyleOptionButton::ButtonFeatures>(var);
     else if (var.userType() == qMetaTypeId<QStyleOptionButton::ButtonFeature>())
         out = qvariant_cast<QStyleOptionButton::ButtonFeature>(var);
+    else if (value.isNumber())
+        out = static_cast<QStyleOptionButton::ButtonFeatures>(value.toInt32());
     else
         out = {};
 }

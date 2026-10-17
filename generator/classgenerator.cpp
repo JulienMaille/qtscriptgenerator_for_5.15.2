@@ -1275,6 +1275,9 @@ static void writeEnumClass(QTextStream &stream, const AbstractMetaClass *meta_cl
     stream << "//" << endl << endl;
 
     // write QScriptValue <--> C++ conversion functions
+    // A bare JS number (e.g. the result of A | B on two enum wrappers) must
+    // convert like the flags-class constructor does, otherwise bit-combined
+    // flags collapse to NotOpen/0 and calls like QIODevice::open() fail.
     stream << "static QScriptValue qtscript_"
            << qtScriptFlagsName << "_toScriptValue("
            << "QScriptEngine *engine, const " << qualifiedFlagsName << " &value)" << endl
@@ -1290,6 +1293,8 @@ static void writeEnumClass(QTextStream &stream, const AbstractMetaClass *meta_cl
            << "        out = qvariant_cast<" << qualifiedFlagsName << ">(var);" << endl
            << "    else if (var.userType() == qMetaTypeId<" << qualifiedEnumName << ">())" << endl
            << "        out = qvariant_cast<" << qualifiedEnumName << ">(var);" << endl
+           << "    else if (value.isNumber())" << endl
+           << "        out = static_cast<" << qualifiedFlagsName << ">(value.toInt32());" << endl
            << "    else" << endl
            << "        out = {};" << endl
            << "}" << endl << endl;

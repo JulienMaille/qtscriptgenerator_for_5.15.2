@@ -477,6 +477,8 @@ static void qtscript_QTextStream_NumberFlags_fromScriptValue(const QScriptValue 
         out = qvariant_cast<QTextStream::NumberFlags>(var);
     else if (var.userType() == qMetaTypeId<QTextStream::NumberFlag>())
         out = qvariant_cast<QTextStream::NumberFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QTextStream::NumberFlags>(value.toInt32());
     else
         out = {};
 }

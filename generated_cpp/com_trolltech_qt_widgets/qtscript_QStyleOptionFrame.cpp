@@ -171,6 +171,8 @@ static void qtscript_QStyleOptionFrame_FrameFeatures_fromScriptValue(const QScri
         out = qvariant_cast<QStyleOptionFrame::FrameFeatures>(var);
     else if (var.userType() == qMetaTypeId<QStyleOptionFrame::FrameFeature>())
         out = qvariant_cast<QStyleOptionFrame::FrameFeature>(var);
+    else if (value.isNumber())
+        out = static_cast<QStyleOptionFrame::FrameFeatures>(value.toInt32());
     else
         out = {};
 }

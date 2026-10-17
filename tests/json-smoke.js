@@ -46,4 +46,45 @@ check(arr.size() === 2 && arr.at(0).toInt() === 7 && arr.at(1).toString() === "s
 var arrDoc = new QJsonDocument(arr);
 check(arrDoc.isArray() && arrDoc.array().size() === 2, "QJsonArray document round-trip failed");
 
+// Open, modify, and save a JSON file through QJsonObject.insert (bound with
+// the discarded-return wrapper; plain bitwise flags stay numbers in script).
+var filePath = "json-smoke-tmp.json";
+function saveDoc(doc) {
+    var f = new QFile(filePath);
+    check(f.open(QIODevice.WriteOnly | QIODevice.Truncate),
+          "QFile open for write failed: " + f.errorString());
+    check(f.write(doc.toJson(QJsonDocument.Indented)) > 0,
+          "QFile.write rejected the JSON buffer");
+    f.close();
+}
+function loadDoc() {
+    var f = new QFile(filePath);
+    check(f.open(QIODevice.ReadOnly), "QFile open for read failed: " + f.errorString());
+    var loaded = QJsonDocument.fromJson(f.readAll());
+    f.close();
+    check(!loaded.isNull(), "reloaded JSON document was reported null");
+    return loaded;
+}
+var edit = new QJsonObject();
+edit.insert("name", new QJsonValue("smoke"));
+edit.insert("n", new QJsonValue(2));
+saveDoc(new QJsonDocument(edit));
+var reloaded = loadDoc();
+check(reloaded.object().value("name").toString() === "smoke"
+      && reloaded.object().value("n").toInt() === 2,
+      "QFile → QJsonDocument.fromJson round-trip lost content");
+var changed = reloaded.object();
+changed.insert("n", new QJsonValue(changed.value("n").toInt() + 1));
+changed.insert("extra", new QJsonValue(true));
+reloaded.setObject(changed);
+saveDoc(reloaded);
+var finalDoc = loadDoc();
+check(finalDoc.object().value("n").toInt() === 3 && finalDoc.object().value("extra").toBool() === true,
+      "QJsonObject.insert edits did not persist through save/load");
+var cleanup = new QFile(filePath);
+if (cleanup.open(QIODevice.WriteOnly | QIODevice.Truncate))
+    cleanup.close();
+if (!new QFile(filePath).remove())
+    check(false, "temp JSON file could not be removed");
+
 print("Qt JSON smoke test passed");

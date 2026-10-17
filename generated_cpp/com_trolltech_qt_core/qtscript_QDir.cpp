@@ -360,6 +360,8 @@ static void qtscript_QDir_SortFlags_fromScriptValue(const QScriptValue &value, Q
         out = qvariant_cast<QDir::SortFlags>(var);
     else if (var.userType() == qMetaTypeId<QDir::SortFlag>())
         out = qvariant_cast<QDir::SortFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QDir::SortFlags>(value.toInt32());
     else
         out = {};
 }
@@ -543,6 +545,8 @@ static void qtscript_QDir_Filters_fromScriptValue(const QScriptValue &value, QDi
         out = qvariant_cast<QDir::Filters>(var);
     else if (var.userType() == qMetaTypeId<QDir::Filter>())
         out = qvariant_cast<QDir::Filter>(var);
+    else if (value.isNumber())
+        out = static_cast<QDir::Filters>(value.toInt32());
     else
         out = {};
 }

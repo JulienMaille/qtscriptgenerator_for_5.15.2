@@ -174,6 +174,8 @@ static void qtscript_QGraphicsBlurEffect_BlurHints_fromScriptValue(const QScript
         out = qvariant_cast<QGraphicsBlurEffect::BlurHints>(var);
     else if (var.userType() == qMetaTypeId<QGraphicsBlurEffect::BlurHint>())
         out = qvariant_cast<QGraphicsBlurEffect::BlurHint>(var);
+    else if (value.isNumber())
+        out = static_cast<QGraphicsBlurEffect::BlurHints>(value.toInt32());
     else
         out = {};
 }

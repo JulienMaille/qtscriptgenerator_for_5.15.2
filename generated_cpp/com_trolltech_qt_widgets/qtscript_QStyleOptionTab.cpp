@@ -173,6 +173,8 @@ static void qtscript_QStyleOptionTab_CornerWidgets_fromScriptValue(const QScript
         out = qvariant_cast<QStyleOptionTab::CornerWidgets>(var);
     else if (var.userType() == qMetaTypeId<QStyleOptionTab::CornerWidget>())
         out = qvariant_cast<QStyleOptionTab::CornerWidget>(var);
+    else if (value.isNumber())
+        out = static_cast<QStyleOptionTab::CornerWidgets>(value.toInt32());
     else
         out = {};
 }

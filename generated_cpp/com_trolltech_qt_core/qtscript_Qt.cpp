@@ -1383,6 +1383,8 @@ static void qtscript_Qt_MatchFlags_fromScriptValue(const QScriptValue &value, Qt
         out = qvariant_cast<Qt::MatchFlags>(var);
     else if (var.userType() == qMetaTypeId<Qt::MatchFlag>())
         out = qvariant_cast<Qt::MatchFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::MatchFlags>(value.toInt32());
     else
         out = {};
 }
@@ -1665,6 +1667,8 @@ static void qtscript_Qt_WindowFlags_fromScriptValue(const QScriptValue &value, Q
         out = qvariant_cast<Qt::WindowFlags>(var);
     else if (var.userType() == qMetaTypeId<Qt::WindowType>())
         out = qvariant_cast<Qt::WindowType>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::WindowFlags>(value.toInt32());
     else
         out = {};
 }
@@ -2089,6 +2093,8 @@ static void qtscript_Qt_Alignment_fromScriptValue(const QScriptValue &value, Qt:
         out = qvariant_cast<Qt::Alignment>(var);
     else if (var.userType() == qMetaTypeId<Qt::AlignmentFlag>())
         out = qvariant_cast<Qt::AlignmentFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::Alignment>(value.toInt32());
     else
         out = {};
 }
@@ -2244,6 +2250,8 @@ static void qtscript_Qt_DockWidgetAreas_fromScriptValue(const QScriptValue &valu
         out = qvariant_cast<Qt::DockWidgetAreas>(var);
     else if (var.userType() == qMetaTypeId<Qt::DockWidgetArea>())
         out = qvariant_cast<Qt::DockWidgetArea>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::DockWidgetAreas>(value.toInt32());
     else
         out = {};
 }
@@ -2813,6 +2821,8 @@ static void qtscript_Qt_WindowStates_fromScriptValue(const QScriptValue &value, 
         out = qvariant_cast<Qt::WindowStates>(var);
     else if (var.userType() == qMetaTypeId<Qt::WindowState>())
         out = qvariant_cast<Qt::WindowState>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::WindowStates>(value.toInt32());
     else
         out = {};
 }
@@ -4457,6 +4467,8 @@ static void qtscript_Qt_DropActions_fromScriptValue(const QScriptValue &value, Q
         out = qvariant_cast<Qt::DropActions>(var);
     else if (var.userType() == qMetaTypeId<Qt::DropAction>())
         out = qvariant_cast<Qt::DropAction>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::DropActions>(value.toInt32());
     else
         out = {};
 }
@@ -4689,6 +4701,8 @@ static void qtscript_Qt_KeyboardModifiers_fromScriptValue(const QScriptValue &va
         out = qvariant_cast<Qt::KeyboardModifiers>(var);
     else if (var.userType() == qMetaTypeId<Qt::KeyboardModifier>())
         out = qvariant_cast<Qt::KeyboardModifier>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::KeyboardModifiers>(value.toInt32());
     else
         out = {};
 }
@@ -5130,6 +5144,8 @@ static void qtscript_Qt_ItemFlags_fromScriptValue(const QScriptValue &value, Qt:
         out = qvariant_cast<Qt::ItemFlags>(var);
     else if (var.userType() == qMetaTypeId<Qt::ItemFlag>())
         out = qvariant_cast<Qt::ItemFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::ItemFlags>(value.toInt32());
     else
         out = {};
 }
@@ -5333,6 +5349,8 @@ static void qtscript_Qt_MouseButtons_fromScriptValue(const QScriptValue &value, 
         out = qvariant_cast<Qt::MouseButtons>(var);
     else if (var.userType() == qMetaTypeId<Qt::MouseButton>())
         out = qvariant_cast<Qt::MouseButton>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::MouseButtons>(value.toInt32());
     else
         out = {};
 }
@@ -5476,6 +5494,8 @@ static void qtscript_Qt_Orientations_fromScriptValue(const QScriptValue &value, 
         out = qvariant_cast<Qt::Orientations>(var);
     else if (var.userType() == qMetaTypeId<Qt::Orientation>())
         out = qvariant_cast<Qt::Orientation>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::Orientations>(value.toInt32());
     else
         out = {};
 }
@@ -5730,6 +5750,8 @@ static void qtscript_Qt_TouchPointStates_fromScriptValue(const QScriptValue &val
         out = qvariant_cast<Qt::TouchPointStates>(var);
     else if (var.userType() == qMetaTypeId<Qt::TouchPointState>())
         out = qvariant_cast<Qt::TouchPointState>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::TouchPointStates>(value.toInt32());
     else
         out = {};
 }
@@ -5982,6 +6004,8 @@ static void qtscript_Qt_InputMethodHints_fromScriptValue(const QScriptValue &val
         out = qvariant_cast<Qt::InputMethodHints>(var);
     else if (var.userType() == qMetaTypeId<Qt::InputMethodHint>())
         out = qvariant_cast<Qt::InputMethodHint>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::InputMethodHints>(value.toInt32());
     else
         out = {};
 }
@@ -6153,6 +6177,8 @@ static void qtscript_Qt_ImageConversionFlags_fromScriptValue(const QScriptValue 
         out = qvariant_cast<Qt::ImageConversionFlags>(var);
     else if (var.userType() == qMetaTypeId<Qt::ImageConversionFlag>())
         out = qvariant_cast<Qt::ImageConversionFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::ImageConversionFlags>(value.toInt32());
     else
         out = {};
 }
@@ -6385,6 +6411,8 @@ static void qtscript_Qt_GestureFlags_fromScriptValue(const QScriptValue &value, 
         out = qvariant_cast<Qt::GestureFlags>(var);
     else if (var.userType() == qMetaTypeId<Qt::GestureFlag>())
         out = qvariant_cast<Qt::GestureFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::GestureFlags>(value.toInt32());
     else
         out = {};
 }
@@ -6540,6 +6568,8 @@ static void qtscript_Qt_ToolBarAreas_fromScriptValue(const QScriptValue &value, 
         out = qvariant_cast<Qt::ToolBarAreas>(var);
     else if (var.userType() == qMetaTypeId<Qt::ToolBarArea>())
         out = qvariant_cast<Qt::ToolBarArea>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::ToolBarAreas>(value.toInt32());
     else
         out = {};
 }
@@ -6841,6 +6871,8 @@ static void qtscript_Qt_TextInteractionFlags_fromScriptValue(const QScriptValue 
         out = qvariant_cast<Qt::TextInteractionFlags>(var);
     else if (var.userType() == qMetaTypeId<Qt::TextInteractionFlag>())
         out = qvariant_cast<Qt::TextInteractionFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<Qt::TextInteractionFlags>(value.toInt32());
     else
         out = {};
 }

@@ -457,6 +457,8 @@ static void qtscript_QStyleOptionViewItem_ViewItemFeatures_fromScriptValue(const
         out = qvariant_cast<QStyleOptionViewItem::ViewItemFeatures>(var);
     else if (var.userType() == qMetaTypeId<QStyleOptionViewItem::ViewItemFeature>())
         out = qvariant_cast<QStyleOptionViewItem::ViewItemFeature>(var);
+    else if (value.isNumber())
+        out = static_cast<QStyleOptionViewItem::ViewItemFeatures>(value.toInt32());
     else
         out = {};
 }

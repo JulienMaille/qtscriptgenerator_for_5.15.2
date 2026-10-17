@@ -222,6 +222,8 @@ static void qtscript_QAbstractSpinBox_StepEnabled_fromScriptValue(const QScriptV
         out = qvariant_cast<QAbstractSpinBox::StepEnabled>(var);
     else if (var.userType() == qMetaTypeId<QAbstractSpinBox::StepEnabledFlag>())
         out = qvariant_cast<QAbstractSpinBox::StepEnabledFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QAbstractSpinBox::StepEnabled>(value.toInt32());
     else
         out = {};
 }

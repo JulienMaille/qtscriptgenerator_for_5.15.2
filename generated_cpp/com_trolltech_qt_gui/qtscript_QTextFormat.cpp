@@ -651,6 +651,8 @@ static void qtscript_QTextFormat_PageBreakFlags_fromScriptValue(const QScriptVal
         out = qvariant_cast<QTextFormat::PageBreakFlags>(var);
     else if (var.userType() == qMetaTypeId<QTextFormat::PageBreakFlag>())
         out = qvariant_cast<QTextFormat::PageBreakFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QTextFormat::PageBreakFlags>(value.toInt32());
     else
         out = {};
 }

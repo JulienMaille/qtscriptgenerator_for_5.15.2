@@ -413,6 +413,8 @@ static void qtscript_QSizePolicy_ControlTypes_fromScriptValue(const QScriptValue
         out = qvariant_cast<QSizePolicy::ControlTypes>(var);
     else if (var.userType() == qMetaTypeId<QSizePolicy::ControlType>())
         out = qvariant_cast<QSizePolicy::ControlType>(var);
+    else if (value.isNumber())
+        out = static_cast<QSizePolicy::ControlTypes>(value.toInt32());
     else
         out = {};
 }

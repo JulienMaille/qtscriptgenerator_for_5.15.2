@@ -255,6 +255,8 @@ static void qtscript_QGraphicsEffect_ChangeFlags_fromScriptValue(const QScriptVa
         out = qvariant_cast<QGraphicsEffect::ChangeFlags>(var);
     else if (var.userType() == qMetaTypeId<QGraphicsEffect::ChangeFlag>())
         out = qvariant_cast<QGraphicsEffect::ChangeFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QGraphicsEffect::ChangeFlags>(value.toInt32());
     else
         out = {};
 }

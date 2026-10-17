@@ -191,6 +191,8 @@ static void qtscript_QTextItem_RenderFlags_fromScriptValue(const QScriptValue &v
         out = qvariant_cast<QTextItem::RenderFlags>(var);
     else if (var.userType() == qMetaTypeId<QTextItem::RenderFlag>())
         out = qvariant_cast<QTextItem::RenderFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QTextItem::RenderFlags>(value.toInt32());
     else
         out = {};
 }

@@ -195,6 +195,8 @@ static void qtscript_QEventLoop_ProcessEventsFlags_fromScriptValue(const QScript
         out = qvariant_cast<QEventLoop::ProcessEventsFlags>(var);
     else if (var.userType() == qMetaTypeId<QEventLoop::ProcessEventsFlag>())
         out = qvariant_cast<QEventLoop::ProcessEventsFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QEventLoop::ProcessEventsFlags>(value.toInt32());
     else
         out = {};
 }

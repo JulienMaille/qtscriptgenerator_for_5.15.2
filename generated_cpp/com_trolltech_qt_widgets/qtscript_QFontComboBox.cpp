@@ -211,6 +211,8 @@ static void qtscript_QFontComboBox_FontFilters_fromScriptValue(const QScriptValu
         out = qvariant_cast<QFontComboBox::FontFilters>(var);
     else if (var.userType() == qMetaTypeId<QFontComboBox::FontFilter>())
         out = qvariant_cast<QFontComboBox::FontFilter>(var);
+    else if (value.isNumber())
+        out = static_cast<QFontComboBox::FontFilters>(value.toInt32());
     else
         out = {};
 }

@@ -309,6 +309,8 @@ static void qtscript_QSql_ParamType_fromScriptValue(const QScriptValue &value, Q
         out = qvariant_cast<QSql::ParamType>(var);
     else if (var.userType() == qMetaTypeId<QSql::ParamTypeFlag>())
         out = qvariant_cast<QSql::ParamTypeFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QSql::ParamType>(value.toInt32());
     else
         out = {};
 }

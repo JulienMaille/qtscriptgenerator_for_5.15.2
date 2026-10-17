@@ -341,6 +341,8 @@ static void qtscript_QInputDialog_InputDialogOptions_fromScriptValue(const QScri
         out = qvariant_cast<QInputDialog::InputDialogOptions>(var);
     else if (var.userType() == qMetaTypeId<QInputDialog::InputDialogOption>())
         out = qvariant_cast<QInputDialog::InputDialogOption>(var);
+    else if (value.isNumber())
+        out = static_cast<QInputDialog::InputDialogOptions>(value.toInt32());
     else
         out = {};
 }

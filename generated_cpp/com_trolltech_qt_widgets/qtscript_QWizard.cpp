@@ -549,6 +549,8 @@ static void qtscript_QWizard_WizardOptions_fromScriptValue(const QScriptValue &v
         out = qvariant_cast<QWizard::WizardOptions>(var);
     else if (var.userType() == qMetaTypeId<QWizard::WizardOption>())
         out = qvariant_cast<QWizard::WizardOption>(var);
+    else if (value.isNumber())
+        out = static_cast<QWizard::WizardOptions>(value.toInt32());
     else
         out = {};
 }

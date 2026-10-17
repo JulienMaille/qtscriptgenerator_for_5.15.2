@@ -259,6 +259,8 @@ static void qtscript_QDialogButtonBox_StandardButtons_fromScriptValue(const QScr
         out = qvariant_cast<QDialogButtonBox::StandardButtons>(var);
     else if (var.userType() == qMetaTypeId<QDialogButtonBox::StandardButton>())
         out = qvariant_cast<QDialogButtonBox::StandardButton>(var);
+    else if (value.isNumber())
+        out = static_cast<QDialogButtonBox::StandardButtons>(value.toInt32());
     else
         out = {};
 }

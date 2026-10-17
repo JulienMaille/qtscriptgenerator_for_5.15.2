@@ -182,6 +182,8 @@ static void qtscript_QImageIOPlugin_Capabilities_fromScriptValue(const QScriptVa
         out = qvariant_cast<QImageIOPlugin::Capabilities>(var);
     else if (var.userType() == qMetaTypeId<QImageIOPlugin::Capability>())
         out = qvariant_cast<QImageIOPlugin::Capability>(var);
+    else if (value.isNumber())
+        out = static_cast<QImageIOPlugin::Capabilities>(value.toInt32());
     else
         out = {};
 }

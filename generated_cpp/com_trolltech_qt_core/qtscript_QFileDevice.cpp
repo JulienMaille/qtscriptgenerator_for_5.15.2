@@ -317,6 +317,8 @@ static void qtscript_QFileDevice_Permissions_fromScriptValue(const QScriptValue 
         out = qvariant_cast<QFileDevice::Permissions>(var);
     else if (var.userType() == qMetaTypeId<QFileDevice::Permission>())
         out = qvariant_cast<QFileDevice::Permission>(var);
+    else if (value.isNumber())
+        out = static_cast<QFileDevice::Permissions>(value.toInt32());
     else
         out = {};
 }
@@ -525,6 +527,8 @@ static void qtscript_QFileDevice_FileHandleFlags_fromScriptValue(const QScriptVa
         out = qvariant_cast<QFileDevice::FileHandleFlags>(var);
     else if (var.userType() == qMetaTypeId<QFileDevice::FileHandleFlag>())
         out = qvariant_cast<QFileDevice::FileHandleFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QFileDevice::FileHandleFlags>(value.toInt32());
     else
         out = {};
 }

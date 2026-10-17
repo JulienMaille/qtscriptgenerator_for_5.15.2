@@ -472,6 +472,8 @@ static void qtscript_QStyle_SubControls_fromScriptValue(const QScriptValue &valu
         out = qvariant_cast<QStyle::SubControls>(var);
     else if (var.userType() == qMetaTypeId<QStyle::SubControl>())
         out = qvariant_cast<QStyle::SubControl>(var);
+    else if (value.isNumber())
+        out = static_cast<QStyle::SubControls>(value.toInt32());
     else
         out = {};
 }
@@ -1686,6 +1688,8 @@ static void qtscript_QStyle_State_fromScriptValue(const QScriptValue &value, QSt
         out = qvariant_cast<QStyle::State>(var);
     else if (var.userType() == qMetaTypeId<QStyle::StateFlag>())
         out = qvariant_cast<QStyle::StateFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QStyle::State>(value.toInt32());
     else
         out = {};
 }

@@ -417,6 +417,8 @@ static void qtscript_QGraphicsScene_SceneLayers_fromScriptValue(const QScriptVal
         out = qvariant_cast<QGraphicsScene::SceneLayers>(var);
     else if (var.userType() == qMetaTypeId<QGraphicsScene::SceneLayer>())
         out = qvariant_cast<QGraphicsScene::SceneLayer>(var);
+    else if (value.isNumber())
+        out = static_cast<QGraphicsScene::SceneLayers>(value.toInt32());
     else
         out = {};
 }

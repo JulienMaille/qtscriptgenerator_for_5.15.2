@@ -377,6 +377,8 @@ static void qtscript_QGraphicsView_CacheMode_fromScriptValue(const QScriptValue 
         out = qvariant_cast<QGraphicsView::CacheMode>(var);
     else if (var.userType() == qMetaTypeId<QGraphicsView::CacheModeFlag>())
         out = qvariant_cast<QGraphicsView::CacheModeFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QGraphicsView::CacheMode>(value.toInt32());
     else
         out = {};
 }
@@ -680,6 +682,8 @@ static void qtscript_QGraphicsView_OptimizationFlags_fromScriptValue(const QScri
         out = qvariant_cast<QGraphicsView::OptimizationFlags>(var);
     else if (var.userType() == qMetaTypeId<QGraphicsView::OptimizationFlag>())
         out = qvariant_cast<QGraphicsView::OptimizationFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QGraphicsView::OptimizationFlags>(value.toInt32());
     else
         out = {};
 }

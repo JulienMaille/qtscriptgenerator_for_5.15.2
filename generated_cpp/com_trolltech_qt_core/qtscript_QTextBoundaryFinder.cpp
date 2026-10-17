@@ -207,6 +207,8 @@ static void qtscript_QTextBoundaryFinder_BoundaryReasons_fromScriptValue(const Q
         out = qvariant_cast<QTextBoundaryFinder::BoundaryReasons>(var);
     else if (var.userType() == qMetaTypeId<QTextBoundaryFinder::BoundaryReason>())
         out = qvariant_cast<QTextBoundaryFinder::BoundaryReason>(var);
+    else if (value.isNumber())
+        out = static_cast<QTextBoundaryFinder::BoundaryReasons>(value.toInt32());
     else
         out = {};
 }

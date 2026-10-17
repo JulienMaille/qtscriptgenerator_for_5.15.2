@@ -235,6 +235,8 @@ static void qtscript_QDockWidget_DockWidgetFeatures_fromScriptValue(const QScrip
         out = qvariant_cast<QDockWidget::DockWidgetFeatures>(var);
     else if (var.userType() == qMetaTypeId<QDockWidget::DockWidgetFeature>())
         out = qvariant_cast<QDockWidget::DockWidgetFeature>(var);
+    else if (value.isNumber())
+        out = static_cast<QDockWidget::DockWidgetFeatures>(value.toInt32());
     else
         out = {};
 }

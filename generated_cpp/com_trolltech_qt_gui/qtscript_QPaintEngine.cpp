@@ -492,6 +492,8 @@ static void qtscript_QPaintEngine_PaintEngineFeatures_fromScriptValue(const QScr
         out = qvariant_cast<QPaintEngine::PaintEngineFeatures>(var);
     else if (var.userType() == qMetaTypeId<QPaintEngine::PaintEngineFeature>())
         out = qvariant_cast<QPaintEngine::PaintEngineFeature>(var);
+    else if (value.isNumber())
+        out = static_cast<QPaintEngine::PaintEngineFeatures>(value.toInt32());
     else
         out = {};
 }
@@ -663,6 +665,8 @@ static void qtscript_QPaintEngine_DirtyFlags_fromScriptValue(const QScriptValue 
         out = qvariant_cast<QPaintEngine::DirtyFlags>(var);
     else if (var.userType() == qMetaTypeId<QPaintEngine::DirtyFlag>())
         out = qvariant_cast<QPaintEngine::DirtyFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QPaintEngine::DirtyFlags>(value.toInt32());
     else
         out = {};
 }

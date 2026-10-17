@@ -244,6 +244,8 @@ static void qtscript_QStyleOptionToolButton_ToolButtonFeatures_fromScriptValue(c
         out = qvariant_cast<QStyleOptionToolButton::ToolButtonFeatures>(var);
     else if (var.userType() == qMetaTypeId<QStyleOptionToolButton::ToolButtonFeature>())
         out = qvariant_cast<QStyleOptionToolButton::ToolButtonFeature>(var);
+    else if (value.isNumber())
+        out = static_cast<QStyleOptionToolButton::ToolButtonFeatures>(value.toInt32());
     else
         out = {};
 }

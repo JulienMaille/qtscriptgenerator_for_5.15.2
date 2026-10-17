@@ -309,6 +309,8 @@ static void qtscript_QMatrix4x4_Flags_fromScriptValue(const QScriptValue &value,
         out = qvariant_cast<QMatrix4x4::Flags>(var);
     else if (var.userType() == qMetaTypeId<QMatrix4x4::Flag>())
         out = qvariant_cast<QMatrix4x4::Flag>(var);
+    else if (value.isNumber())
+        out = static_cast<QMatrix4x4::Flags>(value.toInt32());
     else
         out = {};
 }

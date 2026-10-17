@@ -652,6 +652,8 @@ static void qtscript_QGraphicsItem_GraphicsItemFlags_fromScriptValue(const QScri
         out = qvariant_cast<QGraphicsItem::GraphicsItemFlags>(var);
     else if (var.userType() == qMetaTypeId<QGraphicsItem::GraphicsItemFlag>())
         out = qvariant_cast<QGraphicsItem::GraphicsItemFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QGraphicsItem::GraphicsItemFlags>(value.toInt32());
     else
         out = {};
 }

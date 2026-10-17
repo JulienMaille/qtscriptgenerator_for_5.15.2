@@ -277,6 +277,8 @@ static void qtscript_QDateTimeEdit_Sections_fromScriptValue(const QScriptValue &
         out = qvariant_cast<QDateTimeEdit::Sections>(var);
     else if (var.userType() == qMetaTypeId<QDateTimeEdit::Section>())
         out = qvariant_cast<QDateTimeEdit::Section>(var);
+    else if (value.isNumber())
+        out = static_cast<QDateTimeEdit::Sections>(value.toInt32());
     else
         out = {};
 }

@@ -550,6 +550,8 @@ static void qtscript_QTextDocument_FindFlags_fromScriptValue(const QScriptValue 
         out = qvariant_cast<QTextDocument::FindFlags>(var);
     else if (var.userType() == qMetaTypeId<QTextDocument::FindFlag>())
         out = qvariant_cast<QTextDocument::FindFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QTextDocument::FindFlags>(value.toInt32());
     else
         out = {};
 }

@@ -647,6 +647,8 @@ static void qtscript_QPainter_RenderHints_fromScriptValue(const QScriptValue &va
         out = qvariant_cast<QPainter::RenderHints>(var);
     else if (var.userType() == qMetaTypeId<QPainter::RenderHint>())
         out = qvariant_cast<QPainter::RenderHint>(var);
+    else if (value.isNumber())
+        out = static_cast<QPainter::RenderHints>(value.toInt32());
     else
         out = {};
 }

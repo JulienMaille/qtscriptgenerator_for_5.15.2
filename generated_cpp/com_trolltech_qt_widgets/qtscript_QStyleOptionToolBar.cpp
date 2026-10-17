@@ -371,6 +371,8 @@ static void qtscript_QStyleOptionToolBar_ToolBarFeatures_fromScriptValue(const Q
         out = qvariant_cast<QStyleOptionToolBar::ToolBarFeatures>(var);
     else if (var.userType() == qMetaTypeId<QStyleOptionToolBar::ToolBarFeature>())
         out = qvariant_cast<QStyleOptionToolBar::ToolBarFeature>(var);
+    else if (value.isNumber())
+        out = static_cast<QStyleOptionToolBar::ToolBarFeatures>(value.toInt32());
     else
         out = {};
 }

@@ -225,6 +225,8 @@ static void qtscript_QMdiArea_AreaOptions_fromScriptValue(const QScriptValue &va
         out = qvariant_cast<QMdiArea::AreaOptions>(var);
     else if (var.userType() == qMetaTypeId<QMdiArea::AreaOption>())
         out = qvariant_cast<QMdiArea::AreaOption>(var);
+    else if (value.isNumber())
+        out = static_cast<QMdiArea::AreaOptions>(value.toInt32());
     else
         out = {};
 }

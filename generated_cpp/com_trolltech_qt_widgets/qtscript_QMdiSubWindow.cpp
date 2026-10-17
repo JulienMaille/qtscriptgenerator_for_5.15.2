@@ -241,6 +241,8 @@ static void qtscript_QMdiSubWindow_SubWindowOptions_fromScriptValue(const QScrip
         out = qvariant_cast<QMdiSubWindow::SubWindowOptions>(var);
     else if (var.userType() == qMetaTypeId<QMdiSubWindow::SubWindowOption>())
         out = qvariant_cast<QMdiSubWindow::SubWindowOption>(var);
+    else if (value.isNumber())
+        out = static_cast<QMdiSubWindow::SubWindowOptions>(value.toInt32());
     else
         out = {};
 }

@@ -230,6 +230,8 @@ static void qtscript_QItemSelectionModel_SelectionFlags_fromScriptValue(const QS
         out = qvariant_cast<QItemSelectionModel::SelectionFlags>(var);
     else if (var.userType() == qMetaTypeId<QItemSelectionModel::SelectionFlag>())
         out = qvariant_cast<QItemSelectionModel::SelectionFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QItemSelectionModel::SelectionFlags>(value.toInt32());
     else
         out = {};
 }

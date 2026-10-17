@@ -220,6 +220,8 @@ static void qtscript_QNetworkInterface_InterfaceFlags_fromScriptValue(const QScr
         out = qvariant_cast<QNetworkInterface::InterfaceFlags>(var);
     else if (var.userType() == qMetaTypeId<QNetworkInterface::InterfaceFlag>())
         out = qvariant_cast<QNetworkInterface::InterfaceFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QNetworkInterface::InterfaceFlags>(value.toInt32());
     else
         out = {};
 }

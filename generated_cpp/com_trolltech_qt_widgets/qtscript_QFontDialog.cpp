@@ -232,6 +232,8 @@ static void qtscript_QFontDialog_FontDialogOptions_fromScriptValue(const QScript
         out = qvariant_cast<QFontDialog::FontDialogOptions>(var);
     else if (var.userType() == qMetaTypeId<QFontDialog::FontDialogOption>())
         out = qvariant_cast<QFontDialog::FontDialogOption>(var);
+    else if (value.isNumber())
+        out = static_cast<QFontDialog::FontDialogOptions>(value.toInt32());
     else
         out = {};
 }

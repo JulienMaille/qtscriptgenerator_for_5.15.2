@@ -530,6 +530,8 @@ static void qtscript_QAbstractItemView_EditTriggers_fromScriptValue(const QScrip
         out = qvariant_cast<QAbstractItemView::EditTriggers>(var);
     else if (var.userType() == qMetaTypeId<QAbstractItemView::EditTrigger>())
         out = qvariant_cast<QAbstractItemView::EditTrigger>(var);
+    else if (value.isNumber())
+        out = static_cast<QAbstractItemView::EditTriggers>(value.toInt32());
     else
         out = {};
 }

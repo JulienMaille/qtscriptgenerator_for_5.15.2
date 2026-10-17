@@ -185,6 +185,8 @@ static void qtscript_QDirIterator_IteratorFlags_fromScriptValue(const QScriptVal
         out = qvariant_cast<QDirIterator::IteratorFlags>(var);
     else if (var.userType() == qMetaTypeId<QDirIterator::IteratorFlag>())
         out = qvariant_cast<QDirIterator::IteratorFlag>(var);
+    else if (value.isNumber())
+        out = static_cast<QDirIterator::IteratorFlags>(value.toInt32());
     else
         out = {};
 }
