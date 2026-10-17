@@ -1,0 +1,24 @@
+#ifndef QTSCRIPTSHELL_QXMLSTREAMENTITYRESOLVER_H
+#define QTSCRIPTSHELL_QXMLSTREAMENTITYRESOLVER_H
+
+#include <qxmlstream.h>
+#include <QtGlobal>
+
+#include <QtScript/qscriptvalue.h>
+#include <__package_shared.h>
+
+class QtScriptShell_QXmlStreamEntityResolver : public QXmlStreamEntityResolver
+{
+public:
+    QtScriptShell_QXmlStreamEntityResolver();
+    ~QtScriptShell_QXmlStreamEntityResolver();
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 12, 0)
+    QString  resolveEntity(const QString&  publicId, const QString&  systemId);
+#endif
+    QString  resolveUndeclaredEntity(const QString&  name);
+
+    QScriptValue __qtscript_self;
+};
+
+#endif // QTSCRIPTSHELL_QXMLSTREAMENTITYRESOLVER_H
