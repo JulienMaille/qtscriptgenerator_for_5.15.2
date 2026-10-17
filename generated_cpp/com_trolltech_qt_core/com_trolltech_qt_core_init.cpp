@@ -37,6 +37,11 @@ QScriptValue qtscript_create_QDirIterator_class(QScriptEngine *engine);
 //QScriptValue qtscript_create_QFutureWatcher_class(QScriptEngine *engine);
 QScriptValue qtscript_create_QDir_class(QScriptEngine *engine);
 QScriptValue qtscript_create_QIODevice_class(QScriptEngine *engine);
+QScriptValue qtscript_create_QJsonDocument_class(QScriptEngine *engine);
+QScriptValue qtscript_create_QJsonObject_class(QScriptEngine *engine);
+QScriptValue qtscript_create_QJsonParseError_class(QScriptEngine *engine);
+QScriptValue qtscript_create_QJsonValue_class(QScriptEngine *engine);
+QScriptValue qtscript_create_QJsonArray_class(QScriptEngine *engine);
 QScriptValue qtscript_create_QFileDevice_class(QScriptEngine *engine);
 QScriptValue qtscript_create_QFile_class(QScriptEngine *engine);
 //QScriptValue qtscript_create_QFutureIterator_class(QScriptEngine *engine);
@@ -110,6 +115,11 @@ static const char * const qtscript_com_trolltech_qt_core_class_names[] = {
     // Base prototypes must precede QFileDevice, QFile, QTemporaryFile,
     // QProcess and QBuffer; derived bindings capture the current prototype.
     , "QIODevice"
+, "QJsonDocument"
+, "QJsonObject"
+, "QJsonParseError"
+, "QJsonValue"
+, "QJsonArray"
     , "QSize"
     , "QByteArrayMatcher"
     , "QXmlStreamWriter"
@@ -200,6 +210,11 @@ static const QtBindingCreator qtscript_com_trolltech_qt_core_class_functions[] =
     , qtscript_create_QEasingCurve_class
     , qtscript_create_QObject_class
     , qtscript_create_QIODevice_class
+    , qtscript_create_QJsonDocument_class
+    , qtscript_create_QJsonObject_class
+    , qtscript_create_QJsonParseError_class
+    , qtscript_create_QJsonValue_class
+    , qtscript_create_QJsonArray_class
     , qtscript_create_QSize_class
     , qtscript_create_QByteArrayMatcher_class
     , qtscript_create_QXmlStreamWriter_class

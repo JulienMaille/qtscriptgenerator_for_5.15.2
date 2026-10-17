@@ -17,6 +17,8 @@ HEADERS += \
            #$$PWD/qtscriptshell_QFutureSynchronizer.h \
            #$$PWD/qtscriptshell_QFutureSynchronizerVoid.h \
            $$PWD/qtscriptshell_QIODevice.h \
+           $$PWD/qtscriptshell_QJsonDocument.h \
+           $$PWD/qtscriptshell_QJsonParseError.h \
            $$PWD/qtscriptshell_QMimeData.h \
            $$PWD/qtscriptshell_QObject.h \
            $$PWD/qtscriptshell_QParallelAnimationGroup.h \
@@ -76,6 +78,11 @@ SOURCES += \
            #$$PWD/qtscript_QFutureWatcher.cpp \
            #$$PWD/qtscript_QFutureWatcherVoid.cpp \
            $$PWD/qtscript_QIODevice.cpp \
+           $$PWD/qtscript_QJsonArray.cpp \
+           $$PWD/qtscript_QJsonDocument.cpp \
+           $$PWD/qtscript_QJsonObject.cpp \
+           $$PWD/qtscript_QJsonParseError.cpp \
+           $$PWD/qtscript_QJsonValue.cpp \
            $$PWD/qtscript_QLibraryInfo.cpp \
            $$PWD/qtscript_QMargins.cpp \
            $$PWD/qtscript_QMimeData.cpp \
@@ -145,6 +152,8 @@ SOURCES += \
            #$$PWD/qtscriptshell_QFutureSynchronizer.cpp \
            #$$PWD/qtscriptshell_QFutureSynchronizerVoid.cpp \
            $$PWD/qtscriptshell_QIODevice.cpp \
+           $$PWD/qtscriptshell_QJsonDocument.cpp \
+           $$PWD/qtscriptshell_QJsonParseError.cpp \
            $$PWD/qtscriptshell_QMimeData.cpp \
            $$PWD/qtscriptshell_QObject.cpp \
            $$PWD/qtscriptshell_QParallelAnimationGroup.cpp \

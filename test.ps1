@@ -131,6 +131,7 @@ foreach ($name in $configurations) {
 
     foreach ($testName in @(
         "core-smoke.js", "core-regressions-smoke.js", "core-encoding-validation-smoke.js",
+        "json-smoke.js",
         "gui-smoke.js", "gui-regressions-smoke.js",
         "network-smoke.js", "network-regressions-smoke.js",
         "sql-smoke.js", "sql-regressions-smoke.js",
