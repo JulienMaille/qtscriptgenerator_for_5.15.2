@@ -163,6 +163,9 @@ private:
     QMap<QString, AbstractMetaClass *> m_aliased_meta_classes;
     // Alias qualifiers whose target class has not traversed yet.
     QMap<QString, QString> m_pending_alias_targets;
+    // Qt 6: using-alias -> enum/flags entry (e.g. QLocale::Territory for
+    // QLocale::Country). No helpers are generated for the alias spelling.
+    QMap<QString, const TypeEntry *> m_aliased_enum_entries;
     QMap<QString, RejectReason> m_rejected_fields;
 
     QList<AbstractMetaEnum *> m_enums;

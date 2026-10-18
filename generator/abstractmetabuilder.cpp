@@ -1262,6 +1262,28 @@ AbstractMetaClass *AbstractMetaBuilder::traverseClass(ClassModelItem class_item)
                 m_aliased_meta_classes.insert(aliasQualified, targetMeta);
             else
                 m_pending_alias_targets.insert(aliasQualified, targetName);
+        } else if (!aliasEntry) {
+            // Qt 6: using-alias to an enum or flags type WITHOUT its own
+            // typesystem entry (e.g. QLocale::Territory = QLocale::Country,
+            // the Qt 7 rename kept reversed). Map the alias spelling to the
+            // target's entry so signatures resolve; the alias itself gets no
+            // entry, otherwise a second, colliding set of helpers would be
+            // emitted for the same C++ type.
+            QString targetSpelled = earlyAlias->type().qualifiedName().join(QLatin1String("::"));
+            QStringList candidates;
+            candidates << type->qualifiedCppName() + QLatin1String("::") + targetSpelled;
+            if (targetSpelled.contains(QLatin1String("::")))
+                candidates << targetSpelled;
+            foreach (const QString &cand, candidates) {
+                const TypeEntry *targetEntry = TypeDatabase::instance()->findType(cand);
+                if (!targetEntry)
+                    targetEntry = TypeDatabase::instance()->findFlagsType(cand);
+                if (targetEntry && (targetEntry->isEnum() || targetEntry->isFlags())) {
+                    m_aliased_enum_entries.insert(aliasQualified, targetEntry);
+                    break;
+                }
+            }
+            lateAliases.append(earlyAlias);
         } else {
             lateAliases.append(earlyAlias);
         }
@@ -1779,13 +1801,26 @@ void AbstractMetaBuilder::traverseEnums(ScopeModelItem scope_item, AbstractMetaC
     }
 }
 
+// P3: reject log entries carry the overload signature, not just the bare
+// name, so an entry stays diagnostic without external cross-checks (e.g.
+// QDir::count(qsizetype, Qt::Disambiguated_t) instead of QDir::count).
+static QString rejectedFunctionSignature(FunctionModelItem function_item)
+{
+    QStringList argTypes;
+    foreach (ArgumentModelItem arg, function_item->arguments())
+        argTypes << arg->type().toString();
+    return function_item->name() + QLatin1String("(")
+        + argTypes.join(QLatin1String(", ")) + QLatin1String(")");
+}
+
 AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem function_item)
 {
     QString function_name = function_item->name();
     QString class_name = m_current_class->typeEntry()->qualifiedCppName();
 
     if (TypeDatabase::instance()->isFunctionRejected(class_name, function_name)) {
-        m_rejected_functions.insert(class_name + "::" + function_name, GenerationDisabled);
+        m_rejected_functions.insert(class_name + "::" + rejectedFunctionSignature(function_item),
+                                    GenerationDisabled);
         return 0;
     }
 
@@ -1793,7 +1828,8 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
     // in every gadget class. It has no definition to link against and is never
     // script API; drop it universally rather than per-class in typesystems.
     if (function_name == QLatin1String("qt_check_for_QGADGET_macro")) {
-        m_rejected_functions.insert(class_name + "::" + function_name, GenerationDisabled);
+        m_rejected_functions.insert(class_name + "::" + rejectedFunctionSignature(function_item),
+                                    GenerationDisabled);
         return 0;
     }
 
@@ -1826,7 +1862,7 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
         const QString original_operator_name = function_name;
         function_name = rename_operator(function_name.mid(8));
         if (function_name.isEmpty()) {
-            m_rejected_functions.insert(class_name + "::" + original_operator_name,
+            m_rejected_functions.insert(class_name + "::" + rejectedFunctionSignature(function_item),
                                         GenerationDisabled);
             return 0;
         }
@@ -1929,7 +1965,7 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
                                    .arg(class_name)
                                    .arg(function_item->name())
                                    .arg(function_item->type().toString()));
-            m_rejected_functions[class_name + "::" + function_name] =
+            m_rejected_functions[class_name + "::" + rejectedFunctionSignature(function_item)] =
                 UnmatchedReturnType;
             meta_function->setInvalid(true);
             return meta_function;
@@ -1945,19 +1981,76 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
     ArgumentList arguments = function_item->arguments();
     AbstractMetaArgumentList meta_arguments;
 
+    // Qt 6.9+: QT6_DECL_NEW_OVERLOAD disambiguation tags
+    // (Qt::Disambiguated_t = Qt::Disambiguated) select a C++ overload but
+    // carry no script meaning, and the legacy twin always sits behind
+    // QT_CORE_REMOVED_SINCE, invisible here. Drop the tag so the survivor
+    // binds (e.g. QUuid::isNull(), QDir::count()). Both lists are filtered
+    // together, keeping the translation and defaults loops below
+    // index-consistent.
+    {
+        ArgumentList kept;
+        foreach (ArgumentModelItem arg, arguments) {
+            if (arg->type().toString().contains(QLatin1String("Disambiguated")))
+                continue;
+            kept << arg;
+        }
+        arguments = kept;
+    }
+
     int first_default_argument = 0;
     for (int i=0; i<arguments.size(); ++i) {
         ArgumentModelItem arg = arguments.at(i);
 
         bool ok;
-        AbstractMetaType *meta_type = translateType(arg->type(), &ok);
+        // Qt 6.10+: std::optional<T> parameters with a default (QDir::mkdir
+        // and mkpath, QFile::copy). The wrapper has no script meaning: bind
+        // the parameter as T when T is known and flat (no nested templates).
+        // The C++ default (std::nullopt) still applies at the call site,
+        // because the emitter dispatches on arity and lets the compiler fill
+        // omitted arguments; only the non-emptiness of the translated default
+        // matters, never its value.
+        TypeInfo argType = arg->type();
+        QString spelled = argType.toString();
+        int optPos = spelled.indexOf(QLatin1String("optional<"));
+        if (optPos >= 0
+            && (optPos == 0
+                || (!spelled.at(optPos - 1).isLetterOrNumber()
+                    && spelled.at(optPos - 1) != QLatin1Char('_')))) {
+            int open = spelled.indexOf(QLatin1Char('<'), optPos);
+            int depth = 0;
+            int close = -1;
+            for (int k = open; k >= 0 && k < spelled.size(); ++k) {
+                if (spelled.at(k) == QLatin1Char('<'))
+                    ++depth;
+                else if (spelled.at(k) == QLatin1Char('>') && --depth == 0) {
+                    close = k;
+                    break;
+                }
+            }
+            if (open > 0 && close > open) {
+                QString inner = spelled.mid(open + 1, close - open - 1).trimmed();
+                QString trail = spelled.mid(close + 1).trimmed();
+                if (trail.isEmpty() && !inner.contains(QLatin1Char('<'))) {
+                    TypeInfo innerInfo;
+                    innerInfo.setQualifiedName(inner.split(QLatin1String("::"),
+                                                           Qt::SkipEmptyParts));
+                    innerInfo.setConstant(argType.isConstant());
+                    innerInfo.setReference(argType.isReference());
+                    innerInfo.setIndirections(argType.indirections());
+                    innerInfo.setVolatile(argType.isVolatile());
+                    argType = innerInfo;
+                }
+            }
+        }
+        AbstractMetaType *meta_type = translateType(argType, &ok);
         if (!meta_type || !ok) {
             ReportHandler::warning(QString("skipping function '%1::%2', "
                                            "unmatched parameter type '%3'")
                                    .arg(class_name)
                                    .arg(function_item->name())
                                    .arg(arg->type().toString()));
-            m_rejected_functions[class_name + "::" + function_name] =
+            m_rejected_functions[class_name + "::" + rejectedFunctionSignature(function_item)] =
                 UnmatchedArgumentType;
             meta_function->setInvalid(true);
             return meta_function;
@@ -2215,6 +2308,60 @@ AbstractMetaType *AbstractMetaBuilder::translateType(const TypeInfo &_typei, boo
     // 6. No? Try looking it up as a flags type
     if (!type)
         type = TypeDatabase::instance()->findFlagsType(qualified_name);
+
+    // 5c. Qt 6: using-alias to an enum or flags type without its own entry
+    // (e.g. QLocale::Territory for QLocale::Country). Reuse the target's
+    // entry. The per-class pass covers the holder's own signatures; the
+    // on-demand fallback below covers consumers traversing EARLIER than
+    // the holder (Qt lacks a traversal order), by reading the holder's
+    // parsed aliases straight from the DOM.
+    if (!type) {
+        QMap<QString, const TypeEntry *>::const_iterator aliasIt
+            = m_aliased_enum_entries.find(qualified_name);
+        if (aliasIt == m_aliased_enum_entries.end() && m_current_class) {
+            QString withContext = m_current_class->qualifiedCppName()
+                                  + QLatin1String("::") + qualified_name;
+            aliasIt = m_aliased_enum_entries.find(withContext);
+        }
+        if (aliasIt != m_aliased_enum_entries.end()) {
+            type = aliasIt.value();
+        } else {
+            int sep = qualified_name.lastIndexOf(QLatin1String("::"));
+            if (sep > 0) {
+                QString scopeName = qualified_name.left(sep);
+                QString aliasName = qualified_name.mid(sep + 2);
+                ClassModelItem scopeItem = m_dom->findClass(scopeName);
+                if (scopeItem) {
+                    foreach (TypeAliasModelItem alias, scopeItem->typeAliases()) {
+                        if (alias->name() != aliasName)
+                            continue;
+                        QString targetSpelled = alias->type().qualifiedName()
+                                                .join(QLatin1String("::"));
+                        QStringList candidates;
+                        candidates << scopeName + QLatin1String("::") + targetSpelled;
+                        if (targetSpelled.contains(QLatin1String("::")))
+                            candidates << targetSpelled;
+                        foreach (const QString &cand, candidates) {
+                            const TypeEntry *targetEntry
+                                = TypeDatabase::instance()->findType(cand);
+                            if (!targetEntry) {
+                                targetEntry = TypeDatabase::instance()
+                                              ->findFlagsType(cand);
+                            }
+                            if (targetEntry
+                                && (targetEntry->isEnum() || targetEntry->isFlags())) {
+                                m_aliased_enum_entries.insert(qualified_name, targetEntry);
+                                type = targetEntry;
+                                break;
+                            }
+                        }
+                        if (type)
+                            break;
+                    }
+                }
+            }
+        }
+    }
 
     // (6b moved after step 9: scoped resolution must precede global
     // fuzzy matching. See below.)

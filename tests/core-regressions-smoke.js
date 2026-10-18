@@ -199,6 +199,20 @@ check(zonedInstant.offsetFromUtc() === 3600
 check(zonedInstant.date().startOfDay(fixedZone).date().equals(zonedInstant.date())
       && zonedInstant.date().endOfDay(fixedZone).date().equals(zonedInstant.date()),
       "QDate start/end-of-day helpers returned the wrong date");
+// Audit P1/P2 (2026-10-18): API recovered from generator rejects. Each
+// check fails (missing function) without its fix; all call shapes used
+// here already appear elsewhere in this suite.
+check(new QUuid().isNull() === true,
+      "QUuid::isNull() lost (Disambiguated tag)");
+check(Number(locale.territory()) > 0,
+      "QLocale::territory() lost (Territory alias)");
+check(QUrl.fromUserInput("https://example.com").isValid() === true,
+      "QUrl::fromUserInput() lost (UserInputResolutionOptions)");
+var auditProbeParent = new QDir(QDir.tempPath());
+auditProbeParent.rmdir("qtscriptgenerator-qt6-audit-probe");
+check(auditProbeParent.mkdir("qtscriptgenerator-qt6-audit-probe")
+      && auditProbeParent.rmdir("qtscriptgenerator-qt6-audit-probe"),
+      "QDir::mkdir/rmdir lost (std::optional unwrapping)");
 
 var settings = new QSettings(settingsPath, QSettings.IniFormat);
 check(typeof settings.iniCodec === "undefined" && typeof settings.setIniCodec === "undefined",

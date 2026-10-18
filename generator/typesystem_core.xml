@@ -541,6 +541,22 @@
     <reject-enum-value name="QtSystemMsg"/>
   </enum-type>
 
+  <!-- Audit P1 (2026-10-18): nested and scoped enums whose absence drops
+       whole Qt 6.12 API groups (each verified in mjb_rejected_enums.log,
+       section Not in type system, against the Qt 6.12 headers).
+       QLocale::Territory is deliberately NOT declared here: it names a
+       using-alias of QLocale::Country (qlocale.h:867) and a second entry
+       would emit a colliding set of helpers for the same C++ type. The
+       builder maps the alias spelling to Country's entry instead (see
+       m_aliased_enum_entries). -->
+  <enum-type name="QDateTime::TransitionResolution"/>
+  <enum-type name="QTimeZone::NameType"/>
+  <enum-type name="QTimeZone::TimeType"/>
+  <enum-type name="QUuid::StringFormat"/>
+  <enum-type name="QUrl::AceProcessingOption" flags="QUrl::AceProcessingOptions"/>
+  <enum-type name="QUrl::UserInputResolutionOption" flags="QUrl::UserInputResolutionOptions"/>
+  <enum-type name="QByteArray::Base64Option" flags="QByteArray::Base64Options"/>
+
 
   <enum-type name="QReadWriteLock::RecursionMode"/>
   <enum-type name="QSystemSemaphore::AccessMode"/>
