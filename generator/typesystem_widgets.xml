@@ -183,7 +183,7 @@
   <enum-type name="QLCDNumber::SegmentStyle"/>
   <enum-type name="QLayout::SizeConstraint"/>
   <enum-type name="QLineEdit::EchoMode"/>
-  <enum-type name="QLineF::IntersectType"/>
+  <enum-type name="QLineF::IntersectionType"/>
   <enum-type name="QListView::Flow"/>
   <enum-type name="QListView::LayoutMode"/>
   <enum-type name="QListView::Movement"/>

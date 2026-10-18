@@ -2835,6 +2835,14 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
         AbstractMetaType *ftype = function->type();
         f->setType(inheritTemplateType(template_types, ftype, &ok));
         if (!ok) {
+            // Qt 6: the function is dropped from the subclass here and nowhere
+            // else. Qt 6's containers spell many of their members with internal
+            // typedefs (const_reference, parameter_type, ...) that do not
+            // resolve against the template argument, so QPolygon loses the
+            // whole QList member set without a trace. Record it.
+            m_lost_template_functions << QString("%1 <- %2::%3() : return type '%4' is not resolvable for the instantiation")
+                                          .arg(subclass->name(), template_class->name(), function->name(),
+                                               ftype ? ftype->cppSignature() : QString("<none>"));
             delete f;
             continue;
         }
@@ -2844,8 +2852,15 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
 
             AbstractMetaArgument *arg = argument->copy();
             AbstractMetaType *inherited = inheritTemplateType(template_types, atype, &ok);
-            if (!ok)
+            if (!ok) {
+                // Qt 6: same as above, for the arguments (parameter_type,
+                // rvalue_ref, AT, ...). Reported once per function, not per
+                // argument.
+                m_lost_template_functions << QString("%1 <- %2::%3() : argument type '%4' is not resolvable for the instantiation")
+                                              .arg(subclass->name(), template_class->name(), function->name(),
+                                                   atype ? atype->cppSignature() : QString("<none>"));
                 break;
+            }
             // Qt 6: a container argument written against the class's own
             // template parameter (QList<T> & in QList::swap) can come through
             // without its instantiation. That leaves the generated argument
@@ -2894,6 +2909,8 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
             }
         }
         if (found) {
+            m_lost_template_functions << QString("%1 <- %2::%3() : shadowed by a function of the same name in %1")
+                                          .arg(subclass->name(), template_class->name(), function->name());
             delete f;
             continue;
         }
@@ -3205,12 +3222,39 @@ static void write_reject_log_file(const QString &name,
 }
 
 
+// Qt 6: functions of a container template that could not be carried into a
+// subclass, or that a name clash shadowed. The reject logs cannot show them -
+// the function is not rejected, it is simply never built - so this file is the
+// only record that the subclass is missing part of the container's API.
+static void write_lost_template_log_file(const QString &name, const QStringList &lost)
+{
+    QFile f(name);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        ReportHandler::warning(QString("failed to write log file: '%1'")
+                               .arg(f.fileName()));
+        return;
+    }
+
+    QTextStream s(&f);
+
+    s << QString(72, '*') << endl;
+    s << "Container template functions not built into the subclass";
+    s << endl;
+    s << QString(72, '*') << endl;
+
+    foreach (const QString &line, lost)
+        s << " - " << line << endl;
+
+    s << endl;
+}
+
 void AbstractMetaBuilder::dumpLog()
 {
     write_reject_log_file("mjb_rejected_classes.log", m_rejected_classes);
     write_reject_log_file("mjb_rejected_enums.log", m_rejected_enums);
     write_reject_log_file("mjb_rejected_functions.log", m_rejected_functions);
     write_reject_log_file("mjb_rejected_fields.log", m_rejected_fields);
+    write_lost_template_log_file("mjb_lost_template_functions.log", m_lost_template_functions);
 }
 
 // Deterministic class ordering. The result of this function decides the order

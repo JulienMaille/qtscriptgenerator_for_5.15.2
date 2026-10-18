@@ -577,10 +577,16 @@
   <enum-type name="QEventLoop::ProcessEventsFlag" flags="QEventLoop::ProcessEventsFlags"/>
   <enum-type name="QFileDevice::FileHandleFlag" flags="QFileDevice::FileHandleFlags"/>
   <enum-type name="QFileDevice::FileError"/>
-  <enum-type name="QFileDevice::MemoryMapFlags"/>
+  <!-- Qt 6: the enumeration is QFileDevice::MemoryMapFlag; MemoryMapFlags is
+       its Q_DECLARE_FLAGS name. Declaring the flags name as the enum-type left
+       every enumerator key (ReadOnly, ReadWrite, ...) unbound. -->
+  <enum-type name="QFileDevice::MemoryMapFlag" flags="QFileDevice::MemoryMapFlags"/>
   <enum-type name="QFileDevice::Permission" flags="QFileDevice::Permissions"/>
   <enum-type name="QIODevice::OpenModeFlag" flags="QIODevice::OpenMode"/>
-  <enum-type name="QLibraryInfo::LibraryLocation"/>
+  <!-- Qt 6: QLibraryInfo::LibraryLocation is QLibraryInfo::LibraryPath. Under
+       the Qt 5 name, location(), paths() and the enumerator keys (PrefixPath,
+       BinariesPath, ...) were silently left unbound. -->
+  <enum-type name="QLibraryInfo::LibraryPath"/>
   <enum-type name="QLocale::FormatType"/>
   <enum-type name="QLocale::QuotationStyle"/>
   <enum-type name="QLocale::CurrencySymbolFormat"/>
@@ -1764,6 +1770,13 @@
   </object-type>
   <object-type name="QLibraryInfo"/>
   <object-type name="QBasicMutex"/>
+  <!-- Qt 6 splits QReadWriteLock the way it splits QMutex: the locking API
+       (lockForRead, tryLockForRead, lockForWrite, tryLockForWrite, unlock)
+       lives in QBasicReadWriteLock, which QReadWriteLock only derives from.
+       Without that base in the type system QReadWriteLock was generated with an
+       empty function table - the class was visible from script and could not
+       lock anything. Same treatment as QBasicMutex above. -->
+  <object-type name="QBasicReadWriteLock"/>
   <object-type name="QMutex"/>
   <object-type name="QSemaphore"/>
   <object-type name="QSocketNotifier"/>

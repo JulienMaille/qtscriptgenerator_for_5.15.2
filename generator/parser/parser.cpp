@@ -203,6 +203,32 @@ void Parser::reportError(const QString& msg)
     }
 }
 
+void Parser::reportDroppedDeclaration(const char *scope, std::size_t startDecl)
+{
+    // A declaration the parser cannot parse is dropped from the code model by
+    // the caller's error recovery, and the enclosing class keeps binding
+    // without it: nothing else in the run says the member ever existed. Qt 6
+    // headers do hit this path - a member declared with a trailing
+    // ref-qualifier ('QByteArray left(qsizetype) const &') is not handled by
+    // parseExceptionSpecification() - so a missing function has to be
+    // traceable to this line instead of being guessed from a diff.
+    int line = 0, column = 0;
+    QString fileName;
+    location().positionAt(token_stream.position(startDecl), &line, &column, &fileName);
+
+    const std::size_t stuck = token_stream.cursor();
+    QString startText, stuckText;
+    if (token_stream.kind(startDecl) == Token_identifier && token_stream.symbol(startDecl))
+        startText = token_stream.symbol(startDecl)->as_string();
+    if (token_stream.kind(stuck) == Token_identifier && token_stream.symbol(stuck))
+        stuckText = token_stream.symbol(stuck)->as_string();
+
+    fprintf(stderr, "** WARNING dropped %s declaration at %s:%d "
+                    "(starts at token '%s', parser stuck at token kind=%d '%s')\n",
+            scope, qPrintable(fileName), line,
+            qPrintable(startText), token_stream.kind(stuck), qPrintable(stuckText));
+}
+
 bool Parser::skipUntil(int token)
 {
   while (token_stream.lookAhead())
@@ -419,6 +445,7 @@ bool Parser::parseTranslationUnit(TranslationUnitAST *&node)
       else
         {
           // error recovery
+          reportDroppedDeclaration("top-level", startDecl);
           if (startDecl == token_stream.cursor())
             {
               // skip at least one token
@@ -570,6 +597,7 @@ bool Parser::parseLinkageBody(LinkageBodyAST *&node)
       else
         {
           // error recovery
+          reportDroppedDeclaration("top-level", startDecl);
           if (startDecl == token_stream.cursor())
             {
               // skip at least one token
@@ -2058,6 +2086,7 @@ bool Parser::parseClassSpecifier(TypeSpecifierAST *&node)
       DeclarationAST *memSpec = 0;
       if (!parseMemberSpecification(memSpec))
         {
+          reportDroppedDeclaration("member", startDecl);
           if (getenv("QTSG_TRACE")) {
             int line = 0, col = 0; QString file;
             _M_location.positionAt(token_stream.position(startDecl), &line, &col, &file);

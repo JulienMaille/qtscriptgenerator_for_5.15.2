@@ -63,6 +63,10 @@ public:
 
 private:
   void reportError(const QString& msg);
+  // Reports a declaration the parser could not parse and is about to drop from
+  // the code model. Called from the error-recovery paths, because a dropped
+  // declaration disappears without any other trace of the run.
+  void reportDroppedDeclaration(const char *scope, std::size_t startDecl);
   void syntaxError();
   void tokenRequiredError(int expected);
 

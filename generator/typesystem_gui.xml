@@ -92,7 +92,11 @@
   <enum-type name="QKeySequence::SequenceFormat"/>
   <enum-type name="QKeySequence::SequenceMatch"/>
   <enum-type name="QKeySequence::StandardKey"/>
-  <enum-type name="QLineF::IntersectType"/>
+  <!-- Qt 6: QLineF::IntersectType is QLineF::IntersectionType. Under the Qt 5
+       name nothing was emitted at all: intersects()/intersectType() and the
+       enum keys (UnboundedIntersection, BoundedIntersection) were missing from
+       the GUI bindings. -->
+  <enum-type name="QLineF::IntersectionType"/>
   <enum-type name="QMatrix4x4::Flag" flags="QMatrix4x4::Flags"/>
   <enum-type name="QMovie::CacheMode"/>
   <enum-type name="QMovie::MovieState"/>

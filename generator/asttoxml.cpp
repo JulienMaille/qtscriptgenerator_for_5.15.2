@@ -138,6 +138,14 @@ void writeOutFunction(QXmlStreamWriter &s, FunctionModelItem &item) {
     s.writeStartElement("function");
     s.writeAttribute("name", qualified_name);
 
+    // Qt 6: report whether the parse carried the 'static' storage specifier
+    // through. Without it the dump cannot tell a static member from an instance
+    // one, and a member whose static flag the parser lost (QUuid::createUuid,
+    // QPoint::dotProduct) looks exactly like a normal instance function in the
+    // only view that shows the parse result.
+    if (item->isStatic())
+        s.writeAttribute("static", "true");
+
     if (!item->exception().isEmpty()) {
         s.writeStartElement("exception");
         s.writeAttribute("throw", item->exception());
@@ -157,6 +165,15 @@ void writeOutClass(QXmlStreamWriter &s, ClassModelItem &item) {
     QString qualified_name = item->qualifiedName().join("::");
     s.writeStartElement("class");
     s.writeAttribute("name", qualified_name);
+
+    // Qt 6: a bound class derives from its C++ base class in the wrapper, so a
+    // base the generator drops (QReadWriteLock's QBasicReadWriteLock,
+    // QFileIconProvider's QAbstractFileIconProvider) leaves the class incomplete
+    // without a word. The dump said nothing about inheritance, so this was
+    // invisible in the only view of the parse result.
+    const QStringList bases = item->baseClasses();
+    if (!bases.isEmpty())
+        s.writeAttribute("bases", bases.join(","));
 
     QHash<QString, EnumModelItem> enumMap = item->enumMap();
     foreach (EnumModelItem enumItem, enumMap.values()) {

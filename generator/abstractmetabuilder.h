@@ -168,6 +168,12 @@ private:
     QMap<QString, const TypeEntry *> m_aliased_enum_entries;
     QMap<QString, RejectReason> m_rejected_fields;
 
+    // Qt 6: functions of a container template that inheritTemplate() could not
+    // re-instantiate for a subclass (QPolygon <- QList<QPoint>). They are
+    // dropped from the class without a warning anywhere else, so collect them
+    // and write them to mjb_lost_template_functions.log in dumpLog().
+    QStringList m_lost_template_functions;
+
     QList<AbstractMetaEnum *> m_enums;
 
     QList<QPair<AbstractMetaArgument *, AbstractMetaFunction *> > m_enum_default_arguments;
