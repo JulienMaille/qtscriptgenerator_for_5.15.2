@@ -8,7 +8,12 @@ param(
     [string] $QtScriptPrefix = $env:QTSCRIPT_PREFIX,
 
     [ValidateRange(1000, 600000)]
-    [int] $EvaluatorTimeoutMilliseconds = 120000
+    [int] $EvaluatorTimeoutMilliseconds = 120000,
+
+    # The surface coverage suite is built from generated_cpp/ on every run and
+    # needs no switch. This drops it, for a quick local loop only: the emitted
+    # class and member surface is then not verified.
+    [switch] $SkipSurfaceCoverage
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,6 +53,42 @@ $configurations = switch ($Configuration) {
     "Debug" { @("debug") }
     "Release" { @("release") }
     default { @("release", "debug") }
+}
+
+# The smoke suites are discovered, not listed: adding tests/*-smoke.js is enough
+# for it to run, and a suite can only be left out by naming it in
+# $excludedSmokeTests, so an omission is a deliberate, visible edit. The list
+# used to be written out here, which silently ignored every suite it did not
+# name.
+$excludedSmokeTests = @(
+    # Empty on purpose: name a suite here only with the reason beside it.
+)
+$testDirectory = Join-Path $PSScriptRoot "tests"
+$smokeTests = @(Get-ChildItem -LiteralPath $testDirectory -Filter "*-smoke.js" -File | Sort-Object Name)
+foreach ($excluded in $excludedSmokeTests) {
+    if (-not (Test-Path -LiteralPath (Join-Path $testDirectory $excluded))) {
+        throw "Excluded smoke suite does not exist: tests\$excluded"
+    }
+}
+$smokeTests = @($smokeTests | Where-Object { $excludedSmokeTests -notcontains $_.Name })
+if ($smokeTests.Count -eq 0) {
+    throw "No smoke suite found: $(Join-Path $testDirectory '*-smoke.js')"
+}
+
+# The surface coverage suite asserts that everything the generator wrote into
+# generated_cpp/ is reachable from script in the bindings built from it. It is
+# derived from the generated projects and written under logs/, so no generated
+# file is committed and the suite follows the Qt version that was generated.
+$surfaceCoverageSuite = $null
+if ($SkipSurfaceCoverage) {
+    Write-Warning "Surface coverage suite skipped: the emitted class and member surface is not verified."
+} else {
+    $generatedRoot = Join-Path $PSScriptRoot "generated_cpp"
+    if (-not (Test-Path -LiteralPath $generatedRoot -PathType Container)) {
+        throw "generated_cpp/ is missing and the surface coverage suite is built from it. Run generator\regen-all.ps1 first, or pass -SkipSurfaceCoverage to run without it."
+    }
+    $surfaceCoverageSuite = Join-Path $logRoot "surface-coverage-smoke.js"
+    & (Join-Path $PSScriptRoot "tools\surface-coverage.ps1") -GeneratedRoot $generatedRoot -OutputPath $surfaceCoverageSuite
 }
 
 function Invoke-Evaluator {
@@ -129,23 +170,17 @@ foreach ($name in $configurations) {
         -Label "$name-scripttools-smoke" -TimeoutMilliseconds $EvaluatorTimeoutMilliseconds
     Write-Host "QtScriptTools debugger smoke test passed: $name"
 
-    foreach ($testName in @(
-        "core-smoke.js", "core-regressions-smoke.js", "core-encoding-validation-smoke.js",
-        "json-smoke.js",
-        "gui-smoke.js", "gui-regressions-smoke.js",
-        "network-smoke.js", "network-regressions-smoke.js",
-        "sql-smoke.js", "sql-regressions-smoke.js",
-        "xml-smoke.js", "xml-regressions-smoke.js",
-        "widgets-smoke.js", "widgets-regressions-smoke.js",
-        "printsupport-smoke.js", "printsupport-regressions-smoke.js",
-        "uitools-smoke.js", "uitools-regressions-smoke.js",
-        "svg-smoke.js", "svg-regressions-smoke.js",
-        "qt6-additions-smoke.js"
-    )) {
-        $smokeTest = Join-Path $PSScriptRoot "tests\$testName"
-        Invoke-Evaluator -Evaluator $evaluator -Arguments @($smokeTest) `
-            -Label "$name-$($testName -replace '\.js$', '')" `
-            -TimeoutMilliseconds $EvaluatorTimeoutMilliseconds
-        Write-Host "$testName passed: $name"
+    if ($surfaceCoverageSuite) {
+        Invoke-Evaluator -Evaluator $evaluator -Arguments @($surfaceCoverageSuite) `
+            -Label "$name-surface-coverage-smoke" -TimeoutMilliseconds $EvaluatorTimeoutMilliseconds
+        Write-Host "surface-coverage-smoke.js passed: $name (every emitted class and member is reachable)"
     }
+
+    foreach ($smokeTest in $smokeTests) {
+        Invoke-Evaluator -Evaluator $evaluator -Arguments @($smokeTest.FullName) `
+            -Label "$name-$($smokeTest.BaseName)" `
+            -TimeoutMilliseconds $EvaluatorTimeoutMilliseconds
+        Write-Host "$($smokeTest.Name) passed: $name"
+    }
+    Write-Host "All $($smokeTests.Count) discovered smoke suites passed: $name"
 }

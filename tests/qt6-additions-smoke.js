@@ -120,3 +120,29 @@ checkBox.close();
 stack.close();
 mainWindow.close();
 wizard.close();
+
+// The Qt 6 renames the port had to recover (audit P-A): the Qt 5 spellings were
+// dropped, and these are the Qt 6 members the bindings expose instead. They are
+// asserted without a guard, so a rename that disappears again fails here rather
+// than quietly shrinking the exported surface.
+check(typeof QLibraryInfo !== "undefined" && QLibraryInfo.LibraryPath !== undefined
+      && QLibraryInfo.LibraryPath.PrefixPath !== undefined,
+      "QLibraryInfo::LibraryPath (Qt 5 LibraryLocation) was not exported");
+check(QLibraryInfo.location(QLibraryInfo.LibraryPath.PrefixPath).length > 0,
+      "QLibraryInfo.location(LibraryPath) failed");
+check(QLineF.IntersectionType.BoundedIntersection !== undefined,
+      "QLineF::IntersectionType (Qt 5 IntersectType) was not exported");
+check(QFileDevice.MemoryMapFlag.NoOptions !== undefined
+      && QFileDevice.MemoryMapFlag.MapPrivateOption !== undefined,
+      "QFileDevice::MemoryMapFlag (Qt 5 MemoryMapFlags) was not exported");
+
+check(typeof QBasicReadWriteLock !== "undefined",
+      "QBasicReadWriteLock, the base that carries the QReadWriteLock members, was not exported");
+var readWriteLock = new QReadWriteLock();
+readWriteLock.lockForRead();
+readWriteLock.unlock();
+readWriteLock.lockForWrite();
+readWriteLock.unlock();
+check(typeof readWriteLock.tryLockForRead === "function"
+      && typeof readWriteLock.tryLockForWrite === "function",
+      "QReadWriteLock must expose the members it inherits from QBasicReadWriteLock");

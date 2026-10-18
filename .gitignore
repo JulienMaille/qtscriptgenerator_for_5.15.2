@@ -60,3 +60,7 @@ generator/_ptest/nondet.txt
 # sources that are re-attached to the fresh output.
 /generated_cpp/
 /regen-test/
+
+# test.ps1 output: the evaluator stdout/stderr and the surface coverage suite it
+# derives from generated_cpp/ on every run (tools/surface-coverage.ps1)
+/logs/
