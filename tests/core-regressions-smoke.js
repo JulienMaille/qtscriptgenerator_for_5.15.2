@@ -175,56 +175,30 @@ var utcZone = new QTimeZone("UTC");
 check(utcZone.isValid() && utcZone.id().toString() === "UTC"
       && !utcZone.hasDaylightTime() && typeof utcZone.isUtcOrFixedOffset === "function",
       "QTimeZone UTC construction failed");
-// TODO(2026-10-18): temporary diagnostics, drop once the Qt 6.8 report is
-// understood. Qt 6.8 and Qt 6.12 declare QTimeZone's IANA helpers and
-// QDate::startOfDay differently (6.12 keeps the QByteArray overloads behind
-// QT_CORE_REMOVED_SINCE and leaves the QByteArrayView ones), and a failed
-// conjunction names only itself: report every value of the block, or the error
-// it threw, in each message below instead of a bare boolean.
-function tzProbe(label, action) {
-    try {
-        return label + "=" + action();
-    } catch (error) {
-        return label + "=THREW(" + error + ")";
-    }
-}
-var tzReport = " [" + [
-    tzProbe("utc().id()", function () { return QTimeZone.utc().id().toString(); }),
-    tzProbe("isTimeZoneIdAvailable('UTC')", function () { return QTimeZone.isTimeZoneIdAvailable("UTC"); }),
-    tzProbe("availableTimeZoneIds().length", function () { return QTimeZone.availableTimeZoneIds().length; }),
-    tzProbe("fixedSecondsAheadOfUtc()", function () { return QTimeZone.fromSecondsAheadOfUtc(3600).fixedSecondsAheadOfUtc(); }),
-    tzProbe("offsetFromUtc(fixedZone)", function () { return instant.toTimeZone(QTimeZone.fromSecondsAheadOfUtc(3600)).offsetFromUtc(); }),
-    tzProbe("timeZone().offsetFromUtc(instant)", function () {
-        var zone = QTimeZone.fromSecondsAheadOfUtc(3600);
-        var zoned = instant.toTimeZone(zone);
-        return zoned.timeZone().offsetFromUtc(zoned);
-    }),
-    tzProbe("startOfDay(fixedZone).date()", function () {
-        var zone = QTimeZone.fromSecondsAheadOfUtc(3600);
-        return instant.toTimeZone(zone).date().startOfDay(zone).date().toString("yyyy-MM-dd");
-    }),
-    tzProbe("endOfDay(fixedZone).date()", function () {
-        var zone = QTimeZone.fromSecondsAheadOfUtc(3600);
-        return instant.toTimeZone(zone).date().endOfDay(zone).date().toString("yyyy-MM-dd");
-    })
-].join(", ") + "]";
-
 check(QTimeZone.utc().id().toString() === "UTC"
       && QTimeZone.isTimeZoneIdAvailable("UTC")
       && QTimeZone.availableTimeZoneIds().length > 0,
-      "QTimeZone discovery helpers failed" + tzReport);
+      "QTimeZone discovery helpers failed");
+// IANA <-> Windows id helpers take const QByteArray& on Qt <= 6.12: the
+// script string must survive the conversion (was qscriptvalue_cast, i.e.
+// empty on the 6.8 LTS line). Round-trip through a known IANA id.
+var parisWindowsId = QTimeZone.ianaIdToWindowsId("Europe/Paris").toString();
+check(parisWindowsId.length > 0
+      && QTimeZone.windowsIdToDefaultIanaId(parisWindowsId).toString().length > 0
+      && QTimeZone.windowsIdToIanaIds(parisWindowsId).length > 0,
+      "QTimeZone IANA/Windows id helpers failed");
 var fixedZone = QTimeZone.fromSecondsAheadOfUtc(3600);
 check(fixedZone.isValid()
       && fixedZone.fixedSecondsAheadOfUtc() === 3600,
-      "QTimeZone fixed-offset construction failed" + tzReport);
+      "QTimeZone fixed-offset construction failed");
 var zonedInstant = instant.toTimeZone(fixedZone);
 check(zonedInstant.offsetFromUtc() === 3600
       && zonedInstant.timeZone().offsetFromUtc(zonedInstant) === 3600
       && zonedInstant.toSecsSinceEpoch() === instant.toSecsSinceEpoch(),
-      "QDateTime QTimeZone conversion changed the instant" + tzReport);
+      "QDateTime QTimeZone conversion changed the instant");
 check(zonedInstant.date().startOfDay(fixedZone).date().equals(zonedInstant.date())
       && zonedInstant.date().endOfDay(fixedZone).date().equals(zonedInstant.date()),
-      "QDate start/end-of-day helpers returned the wrong date" + tzReport);
+      "QDate start/end-of-day helpers returned the wrong date");
 
 var settings = new QSettings(settingsPath, QSettings.IniFormat);
 check(typeof settings.iniCodec === "undefined" && typeof settings.setIniCodec === "undefined",
