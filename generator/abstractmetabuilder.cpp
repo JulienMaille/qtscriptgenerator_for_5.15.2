@@ -499,6 +499,20 @@ bool AbstractMetaBuilder::build()
         }
     }
 
+    // Qt 6 (audit): a member can disappear between inheritTemplate() and the
+    // generated file without ever being rejected, so dump the member list the
+    // builder actually holds for the class the caller names in
+    // QTSG_TRACE_FUNCTIONS. Comparing it with the generated file tells the two
+    // possible drop points apart: the builder, or the emitter.
+    const QByteArray tracedName = qgetenv("QTSG_TRACE_FUNCTIONS");
+    if (!tracedName.isEmpty()) {
+        const QString trace = QString::fromLocal8Bit(tracedName);
+        foreach (AbstractMetaClass *cls, m_meta_classes) {
+            if (cls->name().contains(trace, Qt::CaseInsensitive))
+                traceFunctions(cls);
+        }
+    }
+
     QList<TypeEntry *> entries = TypeDatabase::instance()->entries().values();
     foreach (const TypeEntry *entry, entries) {
         if (entry->isPrimitive())
@@ -1289,6 +1303,16 @@ AbstractMetaClass *AbstractMetaBuilder::traverseClass(ClassModelItem class_item)
         }
     }
 
+    // Qt 6 (audit): record the class's own C++11 aliases before its functions
+    // are traversed. They are only visited at the end of this function, which is
+    // too late for the class that declares them: a signature spelled with one of
+    // them would translate to nothing. See translateType(), step 5d.
+    foreach (TypeAliasModelItem classAlias, class_item->typeAliases()) {
+        m_scoped_type_aliases.insert(type->qualifiedCppName()
+                                     + QLatin1String("::") + classAlias->name(),
+                                     classAlias->type());
+    }
+
     traverseFunctions(model_dynamic_cast<ScopeModelItem>(class_item), meta_class);
     traverseEnums(model_dynamic_cast<ScopeModelItem>(class_item), meta_class, class_item->enumsDeclarations());
     traverseFields(model_dynamic_cast<ScopeModelItem>(class_item), meta_class);
@@ -1965,7 +1989,11 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
                                    .arg(class_name)
                                    .arg(function_item->name())
                                    .arg(function_item->type().toString()));
-            m_rejected_functions[class_name + "::" + rejectedFunctionSignature(function_item)] =
+            // Audit: name the type that could not be translated. The warning
+            // above never reaches a redirected stderr, so without this the
+            // reject log says a member was dropped but never why.
+            m_rejected_functions[class_name + "::" + rejectedFunctionSignature(function_item)
+                                 + QString("  [return type '%1']").arg(function_item->type().toString())] =
                 UnmatchedReturnType;
             meta_function->setInvalid(true);
             return meta_function;
@@ -2050,7 +2078,10 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
                                    .arg(class_name)
                                    .arg(function_item->name())
                                    .arg(arg->type().toString()));
-            m_rejected_functions[class_name + "::" + rejectedFunctionSignature(function_item)] =
+            // Audit: as above, record the argument type that could not be
+            // translated, not just the fact that the function was dropped.
+            m_rejected_functions[class_name + "::" + rejectedFunctionSignature(function_item)
+                                 + QString("  [argument %1 type '%2']").arg(i).arg(arg->type().toString())] =
                 UnmatchedArgumentType;
             meta_function->setInvalid(true);
             return meta_function;
@@ -2301,6 +2332,27 @@ AbstractMetaType *AbstractMetaBuilder::translateType(const TypeInfo &_typei, boo
                     type = m_aliased_meta_classes.value(aliasKey)->typeEntry();
                     break;
                 }
+            }
+        }
+    }
+
+    // 5d. Qt 6 (audit): a class-scoped C++11 alias. Qt 6 spells a large part of
+    // its API with aliases declared inside the class (`using value_type = T;`,
+    // `using pointer = T *;`). The scope chain walked above holds the file and
+    // namespace scopes only, and the class's own aliases are traversed after its
+    // functions, so nothing resolves them: the member is reported as an
+    // unmatched type and dropped from the bindings. Follow the alias here,
+    // keeping the operators of the spelling (const, *, &).
+    if (!type && resolveType) {
+        const TypeInfo aliasType = scopedTypeAlias(qualified_name);
+        if (!aliasType.qualifiedName().isEmpty()
+            && aliasType.qualifiedName() != typei.qualifiedName()) {
+            TypeInfo combined = TypeInfo::combine(aliasType, typei);
+            bool isok = false;
+            AbstractMetaType *aliased = translateType(combined, &isok, true, resolveScope);
+            if (aliased != 0 && isok) {
+                *ok = true;
+                return aliased;
             }
         }
     }
@@ -2825,8 +2877,16 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
     AbstractMetaFunctionList funcs = subclass->functions();
     foreach (const AbstractMetaFunction *function, template_class->functions()) {
 
-        if (function->isModifiedRemoved(TypeSystem::All))
+        if (function->isModifiedRemoved(TypeSystem::All)) {
+            // P-E (audit): this is the fourth way a template member disappears
+            // from the subclass, and it left no trace at all - the member is not
+            // rejected, it is simply never built. Record it, so a container
+            // member that is missing from the bindings can be traced to the rule
+            // that removed it.
+            m_lost_template_functions << QString("%1 <- %2::%3() : removed by the type system for the template")
+                                          .arg(subclass->name(), template_class->name(), function->name());
             continue;
+        }
 
         AbstractMetaFunction *f = function->copy();
         f->setArguments(AbstractMetaArgumentList());
@@ -2940,6 +3000,25 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
         }
 
         subclass->addFunction(f);
+    }
+
+    // P-E (audit): report every template member the subclass still does not
+    // have once the loop is done, including the ones none of the exits above
+    // explains. The container members missing from a flattened subclass were in
+    // exactly that blind spot - not rejected, not suppressed, no unresolvable
+    // type - so the only way to see them is to compare the two class function
+    // lists by name.
+    {
+        QSet<QString> subclassNames;
+        foreach (const AbstractMetaFunction *f, subclass->functions())
+            subclassNames.insert(f->name());
+
+        foreach (const AbstractMetaFunction *function, template_class->functions()) {
+            if (!subclassNames.contains(function->name())) {
+                m_lost_template_functions << QString("%1 <- %2::%3() : not built into the subclass (no reason recorded by the copy loop)")
+                                              .arg(subclass->name(), template_class->name(), function->name());
+            }
+        }
     }
 
     // Clean up
@@ -3225,8 +3304,9 @@ static void write_reject_log_file(const QString &name,
 // Qt 6: functions of a container template that could not be carried into a
 // subclass, or that a name clash shadowed. The reject logs cannot show them -
 // the function is not rejected, it is simply never built - so this file is the
-// only record that the subclass is missing part of the container's API.
-static void write_lost_template_log_file(const QString &name, const QStringList &lost)
+// only record that the subclass is missing part of the container's API. The
+// same writer serves the QTSG_TRACE_FUNCTIONS member dump.
+static void write_text_log_file(const QString &name, const QString &title, const QStringList &lines)
 {
     QFile f(name);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -3238,14 +3318,69 @@ static void write_lost_template_log_file(const QString &name, const QStringList 
     QTextStream s(&f);
 
     s << QString(72, '*') << endl;
-    s << "Container template functions not built into the subclass";
-    s << endl;
+    s << title << endl;
     s << QString(72, '*') << endl;
 
-    foreach (const QString &line, lost)
-        s << " - " << line << endl;
+    foreach (const QString &line, lines)
+        s << line << endl;
 
     s << endl;
+}
+
+// Qt 6 (audit): member list of one class as the builder holds it, with the
+// template base class it was instantiated from, so a member missing from the
+// generated file can be traced to the builder or to the emitter.
+// Qt 6 (audit): the type a class-scoped C++11 alias names, for the spelling a
+// member used. Handles both the bare spelling a member inherits from its class
+// (`value_type`) and a qualified one (`QList<T>::rvalue_ref`, whose scope is
+// looked up without its template arguments). Returns an empty TypeInfo when no
+// alias is known, which the caller treats as "not an alias".
+TypeInfo AbstractMetaBuilder::scopedTypeAlias(const QString &qualified_name) const
+{
+    QStringList candidates;
+    if (m_current_class) {
+        candidates << m_current_class->qualifiedCppName()
+                      + QLatin1String("::") + qualified_name;
+    }
+
+    const int sep = qualified_name.lastIndexOf(QLatin1String("::"));
+    if (sep > 0) {
+        const QString scope = qualified_name.left(sep);
+        const QString name = qualified_name.mid(sep + 2);
+        candidates << strip_template_args(scope) + QLatin1String("::") + name;
+    }
+
+    foreach (const QString &candidate, candidates) {
+        QMap<QString, TypeInfo>::const_iterator it = m_scoped_type_aliases.find(candidate);
+        if (it != m_scoped_type_aliases.end())
+            return it.value();
+    }
+
+    return TypeInfo();
+}
+
+void AbstractMetaBuilder::traceFunctions(const AbstractMetaClass *cls)
+{
+    const AbstractMetaClass *template_class = cls->templateBaseClass();
+
+    QString head = QString("%1 : %2 function(s)").arg(cls->name()).arg(cls->functions().size());
+    if (template_class) {
+        head += QString(" [template base '%1' : %2 function(s)]")
+                    .arg(template_class->name())
+                    .arg(template_class->functions().size());
+    }
+    m_traced_functions << head;
+
+    foreach (const AbstractMetaFunction *function, cls->functions())
+        m_traced_functions << QString("    %1 |%2").arg(function->name(), function->signature());
+
+    if (template_class) {
+        m_traced_functions << QString("  members of the template base '%1':").arg(template_class->name());
+        foreach (const AbstractMetaFunction *function, template_class->functions())
+            m_traced_functions << QString("    %1 |%2").arg(function->name(), function->signature());
+    }
+
+    m_traced_functions << QString();
 }
 
 void AbstractMetaBuilder::dumpLog()
@@ -3254,7 +3389,12 @@ void AbstractMetaBuilder::dumpLog()
     write_reject_log_file("mjb_rejected_enums.log", m_rejected_enums);
     write_reject_log_file("mjb_rejected_functions.log", m_rejected_functions);
     write_reject_log_file("mjb_rejected_fields.log", m_rejected_fields);
-    write_lost_template_log_file("mjb_lost_template_functions.log", m_lost_template_functions);
+    write_text_log_file("mjb_lost_template_functions.log",
+                        QLatin1String("Container template functions not built into the subclass"),
+                        m_lost_template_functions);
+    write_text_log_file("mjb_traced_functions.log",
+                        QLatin1String("Member lists of the classes selected with QTSG_TRACE_FUNCTIONS"),
+                        m_traced_functions);
 }
 
 // Deterministic class ordering. The result of this function decides the order

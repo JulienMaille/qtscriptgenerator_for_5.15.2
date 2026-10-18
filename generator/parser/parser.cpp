@@ -716,11 +716,33 @@ bool Parser::parseUsing(DeclarationAST *&node)
           return false;
         }
 
-      ADVANCE(';', ";");
-
       DeclaratorAST *decl = CreateNode<DeclaratorAST>(_M_pool);
       decl->id = aliasName;
-      UPDATE_POS(decl, aliasName->start_token, aliasName->end_token);
+
+      // Qt 6 (audit): an alias may name a pointer or a reference declaration
+      // (`using pointer = T *;`, `using const_reference = const T &;`, both in
+      // qlist.h). Those operators belong to the declarator: without them the
+      // ';' expected below is not there, the declaration is abandoned by the
+      // recovery, and the alias never exists anywhere - so every member of the
+      // class spelled with it is later dropped from the bindings as an
+      // unmatched type. Parse the operators like any other declarator does.
+      for (;;)
+        {
+          const int tk = token_stream.lookAhead();
+          if (tk != '*' && tk != '&' && tk != Token_and)
+            break;
+
+          PtrOperatorAST *ptr_op = CreateNode<PtrOperatorAST>(_M_pool);
+          ptr_op->op = token_stream.cursor();
+          token_stream.nextToken();
+          parseCvQualify(ptr_op->cv);
+          UPDATE_POS(ptr_op, ptr_op->op, token_stream.cursor());
+          decl->ptr_ops = snoc(decl->ptr_ops, ptr_op, _M_pool);
+        }
+
+      ADVANCE(';', ";");
+
+      UPDATE_POS(decl, aliasName->start_token, token_stream.cursor());
 
       InitDeclaratorAST *initDecl = CreateNode<InitDeclaratorAST>(_M_pool);
       initDecl->declarator = decl;

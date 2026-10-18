@@ -145,6 +145,9 @@ protected:
     virtual AbstractMetaType *createMetaType() = 0;
 
 private:
+    void traceFunctions(const AbstractMetaClass *cls);
+    TypeInfo scopedTypeAlias(const QString &qualified_name) const;
+
     void sortLists();
 
     QString m_file_name;
@@ -166,6 +169,13 @@ private:
     // Qt 6: using-alias -> enum/flags entry (e.g. QLocale::Territory for
     // QLocale::Country). No helpers are generated for the alias spelling.
     QMap<QString, const TypeEntry *> m_aliased_enum_entries;
+    // Qt 6 (audit): every class-scoped C++11 alias seen so far, "Class::alias"
+    // -> the type it names. Qt 6 spells a large part of its API with them
+    // (`using value_type = T;`, `using pointer = T *;`), and the class's own
+    // aliases are only traversed after its functions, so translateType() would
+    // otherwise find nothing and drop the member. Filled by traverseClass(),
+    // consulted by translateType(), step 5d.
+    QMap<QString, TypeInfo> m_scoped_type_aliases;
     QMap<QString, RejectReason> m_rejected_fields;
 
     // Qt 6: functions of a container template that inheritTemplate() could not
@@ -173,6 +183,15 @@ private:
     // dropped from the class without a warning anywhere else, so collect them
     // and write them to mjb_lost_template_functions.log in dumpLog().
     QStringList m_lost_template_functions;
+
+    // Qt 6 (audit): with QTSG_TRACE_FUNCTIONS set to a class name fragment, the
+    // member list the builder ended up with is written to
+    // mjb_traced_functions.log. A binding that is missing from the generated
+    // file is then either absent from that list (the builder dropped the member)
+    // or present in it (the member survives the builder and the emitter is the
+    // only place left that can drop it) - which the reject logs cannot tell
+    // apart, since a member can vanish without ever being rejected.
+    QStringList m_traced_functions;
 
     QList<AbstractMetaEnum *> m_enums;
 
