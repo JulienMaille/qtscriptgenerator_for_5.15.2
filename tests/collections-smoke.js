@@ -8,7 +8,9 @@
 // still being isolated (see the reject log, generator/mjb_rejected_functions.log):
 //   - QByteArray.left/right/mid/first/last/sliced/toUpper/toLower: dropped in
 //     qbytearray.h, where the active branch declares them [[nodiscard]] ... const &;
-//   - QByteArray.contains: dropped although its declaration is not ref-qualified;
+//   - QByteArray.contains: dropped on both lines although its declaration is
+//     not ref-qualified; the preprocessor keeps `[[nodiscard]] bool
+//     contains(char c) const noexcept`, so this is a third cause, not P-B's;
 //   - QPolygon.push_back/prepend/insert/fill/contains/indexOf: take a dependent
 //     alias (parameter_type) or QList::AT that the builder cannot resolve;
 //   - QPolygon.mid() is callable but hands back a value with no members at all.
@@ -103,11 +105,23 @@ check(stamp.addSecs(3600).time().hour() === 1, "QDateTime.addSecs() failed");
 check(stamp.toString("yyyy-MM-dd").indexOf("2024-01-01") === 0, "QDateTime.toString(format) failed");
 
 // --- QUuid
-var uuid = QUuid.createUuidV7();
-var uuidText = uuid.toString();
+// QUuid::createUuidV7() appears in Qt 6.9; the 6.8 LTS line declares no such
+// member at all (its quuid.h has createUuid, createUuidV3 and createUuidV5),
+// so this one check is versioned rather than dropped: on a line that has it,
+// asking for it must work and must produce a version 7 uuid.
+if (typeof QUuid.createUuidV7 === "function") {
+    var generated = QUuid.createUuidV7();
+    // version() hands back an enum object rather than a number: Number() reads
+    // the value it carries (7), String() gives the enum key ("UnixEpoch"), and
+    // === against 7 is false, which is why the comparison goes through Number().
+    check(!generated.isNull() && Number(generated.version()) === 7,
+          "QUuid.createUuidV7() must produce a version 7 uuid");
+}
+var fixedUuid = new QUuid("12345678-1234-5678-1234-567812345678");
+var uuidText = fixedUuid.toString();
 // QUuid::toString() keeps the braces of the canonical form.
-check(!uuid.isNull() && uuidText.length === 38 && uuidText.charAt(0) === "{",
-      "QUuid.createUuidV7() static failed");
+check(uuidText.length === 38 && uuidText.charAt(0) === "{",
+      "QUuid.toString() must keep the braces of the canonical form");
 check(QUuid.fromString(uuidText).toString() === uuidText, "QUuid.fromString() static failed");
 var fixedUuid = new QUuid("12345678-1234-5678-1234-567812345678");
 check(fixedUuid.toString() === "{12345678-1234-5678-1234-567812345678}",
