@@ -982,6 +982,11 @@
         </conversion-rule>
       </modify-argument>
     </modify-function>
+    <!-- Qt 6.12: the IANA-id discovery helpers (isTimeZoneIdAvailable and
+         friends) take a QByteArrayView; their QByteArray overloads sit behind
+         QT_CORE_REMOVED_SINCE(6, 12) and are no longer declared against 6.12.
+         Declaring the view type alongside the other view types below is what
+         lets the emitter convert those arguments, so no rule is needed here. -->
   </value-type>
 
   <value-type name="QPersistentModelIndex">
@@ -2905,6 +2910,11 @@
          no bindings of their own -->
     <value-type name="QStringView" generate="no"/>
     <value-type name="QAnyStringView" generate="no"/>
+    <!-- Qt 6.12: QTimeZone's IANA-id discovery helpers (isTimeZoneIdAvailable)
+         take a QByteArrayView; their QByteArray overloads are gone from 6.12
+         builds (QT_CORE_REMOVED_SINCE(6, 12)). Without this entry the core
+         module does not know the type and drops those functions. -->
+    <value-type name="QByteArrayView" generate="no"/>
     <object-type name="QXmlStreamReader">
       <!-- Qt 6: string ctor takes QAnyStringView (implicit from QString);
            convert script strings so new QXmlStreamReader("<root/>") works -->

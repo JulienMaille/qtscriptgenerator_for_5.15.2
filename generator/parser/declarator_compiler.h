@@ -61,8 +61,14 @@ public:
     QString name;
     QString defaultValueExpression;
     bool defaultValue;
+    // Qt 6: the parameter is declared "T&&" (an rvalue reference). Functions
+    // with such a parameter are dropped by the Binder: the generated binding
+    // only ever holds an lvalue, so the call would be ambiguous with the
+    // by-value / const& twin (C2668) or resolve to the deleted copy operation
+    // (C2280). See Binder::declare_symbol.
+    bool rvalue;
 
-    Parameter(): defaultValue(false) {}
+    Parameter(): defaultValue(false), rvalue(false) {}
   };
 
 public:
@@ -75,6 +81,7 @@ public:
   inline bool isFunction() const { return _M_function; }
   inline bool isVariadics() const { return _M_variadics; }
   inline bool isReference() const { return _M_reference; }
+  inline bool isRvalue() const { return _M_rvalue; }
   inline int indirection() const { return _M_indirection; }
   inline QList<Parameter> parameters() const { return _M_parameters; }
 
@@ -88,6 +95,7 @@ private:
 
   bool _M_function;
   bool _M_reference;
+  bool _M_rvalue;
   bool _M_variadics;
   int _M_indirection;
   QString _M_id;

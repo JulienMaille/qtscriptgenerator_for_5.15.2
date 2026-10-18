@@ -736,6 +736,17 @@ void _FunctionModelItem::setInvokable(bool isInvokable)
     _M_isInvokable = isInvokable;
 }
 
+// Qt 6: trailing 'final' virt-specifier
+bool _FunctionModelItem::isFinal() const
+{
+    return _M_isFinal;
+}
+
+void _FunctionModelItem::setFinal(bool isFinal)
+{
+    _M_isFinal = isFinal;
+}
+
 // ---------------------------------------------------------------------------
 TypeInfo _TypeAliasModelItem::type() const
 {

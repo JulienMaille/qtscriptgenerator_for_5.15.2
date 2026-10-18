@@ -51,8 +51,14 @@
 #include <qdebug.h>
 
 DeclaratorCompiler::DeclaratorCompiler(Binder *binder)
-  : _M_binder (binder), _M_token_stream (binder->tokenStream ())
+  : _M_binder (binder), _M_token_stream (binder->tokenStream ()),
+    _M_function (false), _M_reference (false), _M_rvalue (false),
+    _M_variadics (false), _M_indirection (0)
 {
+  // 'run()' sets all of these too, but the constructor must not leave a member
+  // reading uninitialised memory: isRvalue() is consulted by the Binder, and a
+  // compiler instance that was never run() must report "no rvalue reference"
+  // rather than whatever the stack happened to hold.
 }
 
 void DeclaratorCompiler::run(DeclaratorAST *node)
@@ -62,6 +68,7 @@ void DeclaratorCompiler::run(DeclaratorAST *node)
   _M_array.clear();
   _M_function = false;
   _M_reference = false;
+  _M_rvalue = false;
   _M_variadics = false;
   _M_indirection = 0;
 
@@ -119,6 +126,21 @@ void DeclaratorCompiler::visitPtrOperator(PtrOperatorAST *node)
       case '&':
         _M_reference = true;
         break;
+
+      // C++11 rvalue reference: "T&&" (Qt 6: QJsonDocument(QJsonArray&&) and
+      // QCryptographicHash::operator=(QCryptographicHash&&), among others).
+      // The lexer reports "&&" as Token_and and parsePtrOperator accepts it
+      // here. It is NOT equivalent to a single '&': the generated binding only
+      // ever holds an lvalue (a copy of the script value passed by the caller),
+      // so calling such an overload is either ambiguous with its by-value /
+      // const& twin (C2668) or resolves to the deleted copy operation (C2280).
+      // Record it instead of folding it into a plain reference, so the Binder
+      // can drop the whole function - the const& overload, when the class has
+      // one, keeps the feature available from script.
+      case Token_and:
+        _M_reference = true;
+        _M_rvalue = true;
+        break;
       case '*':
         ++_M_indirection;
         break;
@@ -145,6 +167,7 @@ void DeclaratorCompiler::visitParameterDeclaration(ParameterDeclarationAST *node
   decl_cc.run(node->declarator);
 
   p.name = decl_cc.id();
+  p.rvalue = decl_cc.isRvalue();
   p.type = CompilerUtils::typeDescription(node->type_specifier, node->declarator, _M_binder);
 
   // ignore case a single void parameter

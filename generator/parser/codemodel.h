@@ -556,6 +556,9 @@ public:
   bool isInvokable() const; // Qt
   void setInvokable(bool isInvokable); // Qt
 
+  bool isFinal() const; // Qt 6: trailing 'final' virt-specifier
+  void setFinal(bool isFinal);
+
   bool isAbstract() const;
   void setAbstract(bool isAbstract);
 
@@ -585,6 +588,7 @@ private:
       uint _M_isExplicit: 1;
       uint _M_isVariadics: 1;
       uint _M_isInvokable : 1; // Qt
+      uint _M_isFinal: 1; // Qt 6
     };
     uint _M_flags;
   };

@@ -381,6 +381,10 @@ struct DeclaratorAST: public AST
   ParameterDeclarationClauseAST *parameter_declaration_clause;
   const ListNode<std::size_t> *fun_cv;
   ExceptionSpecificationAST *exception_spec;
+  // Qt 6: token index of a trailing 'final' virt-specifier ("void f() final"),
+  // 0 when the declaration carries none. A function that is final in C++
+  // cannot be overridden by the generated QtScriptShell_* subclass.
+  std::size_t final_specifier;
 };
 
 struct DeleteExpressionAST: public ExpressionAST

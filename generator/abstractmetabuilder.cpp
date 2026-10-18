@@ -148,8 +148,17 @@ QString rename_operator(const QString &oper)
         } else if (te) {
             return "operator_cast_" + typeInfo.qualified_name.join("_");
         } else {
-            ReportHandler::warning(QString("unknown operator '%1'").arg(op));
-            return "operator " + op;
+            // Qt 6: a conversion operator whose target type is not in the type
+            // system cannot be bound. The parser records no return type for a
+            // conversion operator (the type lives in its name), so the code
+            // model falls back to the enclosing class: QByteArray's
+            //     Q_IMPLICIT operator std::string_view() const noexcept
+            // was emitted as
+            //     QByteArray _q_result = _q_self->operator std::string_view();
+            // which does not compile. Reject it, exactly like a cast target
+            // that is explicitly not generated.
+            ReportHandler::warning(QString("unknown operator '%1', generation disabled").arg(op));
+            return QString();
         }
     }
 
@@ -1814,9 +1823,10 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
     QString cast_type;
 
     if (function_name.startsWith("operator")) {
+        const QString original_operator_name = function_name;
         function_name = rename_operator(function_name.mid(8));
         if (function_name.isEmpty()) {
-            m_rejected_functions.insert(class_name + "::" + function_name,
+            m_rejected_functions.insert(class_name + "::" + original_operator_name,
                                         GenerationDisabled);
             return 0;
         }
@@ -1840,6 +1850,14 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
         *meta_function += AbstractMetaAttributes::Native;
 
     if (!function_item->isVirtual() && !meta_function->isAbstract())
+        *meta_function += AbstractMetaAttributes::Final;
+
+    // Qt 6: a virtual function declared 'final' in C++ cannot be overridden by
+    // the generated shell either (the shell derives from the C++ class, and
+    // MSVC rejects such an override with C3248). Marking it Final removes it
+    // from the shell's virtual list while keeping it callable from script
+    // (e.g. QXmlStreamEntityResolver::resolveEntity, final since Qt 6.12).
+    if (function_item->isFinal())
         *meta_function += AbstractMetaAttributes::Final;
 
     if (function_item->isInvokable())
@@ -3048,12 +3066,23 @@ void AbstractMetaBuilder::dumpLog()
     write_reject_log_file("mjb_rejected_fields.log", m_rejected_fields);
 }
 
+// Deterministic class ordering. The result of this function decides the order
+// in which the generated files are written and the order in which the classes
+// are registered by the module initialiser. It used to be "sorted" with
+// std::sort on AbstractMetaClass*, which compares the pointers themselves - i.e.
+// the process address layout, which changes from one run to the next. Sort by
+// name so a regen is reproducible.
+static bool metaClassLess(const AbstractMetaClass *a, const AbstractMetaClass *b)
+{
+    return a->name() < b->name();
+}
+
 AbstractMetaClassList AbstractMetaBuilder::classesTopologicalSorted() const
 {
     AbstractMetaClassList res;
 
     AbstractMetaClassList classes = m_meta_classes;
-    std::sort(classes.begin(), classes.end());
+    std::sort(classes.begin(), classes.end(), metaClassLess);
 
     QSet<AbstractMetaClass*> noDependency;
     QHash<AbstractMetaClass*, QSet<AbstractMetaClass* >* > hash;
@@ -3067,6 +3096,12 @@ AbstractMetaClassList AbstractMetaBuilder::classesTopologicalSorted() const
             AbstractMetaClass *impl = interface->primaryInterfaceImplementor();
             if (impl == cls)
                 continue;
+            // An interface without an implementor (or one that could not be
+            // resolved) used to be stored as a null pointer. It can never match
+            // an emitted class, so that dependency stayed unsatisfied forever
+            // and the class was dropped as if its graph were cyclic.
+            if (!impl)
+                continue;
             depends->insert(impl);
         }
 
@@ -3077,27 +3112,66 @@ AbstractMetaClassList AbstractMetaBuilder::classesTopologicalSorted() const
         }
     }
 
-    while (!noDependency.empty()) {
-        foreach (AbstractMetaClass *cls, noDependency.values()) {
-            if(!cls->isInterface())
+    // Emit one dependency wave at a time: the whole wave is appended before its
+    // dependents are released, so a class is always generated after the classes
+    // it derives from.
+    while (!noDependency.isEmpty()) {
+        AbstractMetaClassList wave;
+        foreach (AbstractMetaClass *cls, noDependency)
+            wave.append(cls);
+        std::sort(wave.begin(), wave.end(), metaClassLess);
+        noDependency.clear();
+
+        foreach (AbstractMetaClass *cls, wave) {
+            if (!cls->isInterface())
                 res.append(cls);
-            noDependency.remove(cls);
-            QHashIterator<AbstractMetaClass*, QSet<AbstractMetaClass* >* > i(hash);
-            while (i.hasNext()) {
-                i.next();
+        }
+
+        // Collect the entries whose dependencies are now all emitted, and only
+        // then touch 'hash'. A QHashIterator is invalidated the moment its hash
+        // is modified: the previous code called hash.remove() and deleted the
+        // dependency set from inside the iteration, which is undefined
+        // behaviour. On some runs the scan stopped early, leaving classes in
+        // 'hash' that were then never appended to 'res' - they vanished from the
+        // generated bindings, and which ones vanished depended on the QHash
+        // iteration order (i.e. on the address layout).
+        AbstractMetaClassList released;
+        QHashIterator<AbstractMetaClass *, QSet<AbstractMetaClass *> *> i(hash);
+        while (i.hasNext()) {
+            i.next();
+            foreach (AbstractMetaClass *cls, wave)
                 i.value()->remove(cls);
-                if (i.value()->empty()) {
-                    AbstractMetaClass *key = i.key();
-                    noDependency.insert(key);
-                    hash.remove(key);
-                    delete(i.value());
-                }
-            }
+            if (i.value()->isEmpty())
+                released.append(i.key());
+        }
+
+        foreach (AbstractMetaClass *cls, released) {
+            delete hash.take(cls);
+            noDependency.insert(cls);
         }
     }
 
-    if (!noDependency.empty() || !hash.empty()) {
-        qWarning("dependency graph was cyclic.");
+    // A class still sitting in 'hash' takes part in a dependency cycle: a base
+    // class whose own base is the derived class, or a base class that could not
+    // be resolved. Dropping it silently is what made a whole class - with every
+    // function, enum and field it owns - disappear from the bindings, while the
+    // build stayed green because generated_cpp still held the previous file.
+    // Keep the class, append it in a deterministic order, and say so on stderr:
+    // this build does not print qWarning output, so a warning alone is invisible
+    // in the regen log.
+    if (!hash.isEmpty()) {
+        AbstractMetaClassList cyclic;
+        foreach (AbstractMetaClass *cls, hash.keys())
+            cyclic.append(cls);
+        std::sort(cyclic.begin(), cyclic.end(), metaClassLess);
+        fprintf(stderr, "*** dependency graph is cyclic: %d class(es) kept and "
+                        "appended in name order\n", int(cyclic.size()));
+        foreach (AbstractMetaClass *cls, cyclic) {
+            fprintf(stderr, "***   cyclic: %s\n", qPrintable(cls->name()));
+            if (!cls->isInterface())
+                res.append(cls);
+            delete hash.take(cls);
+        }
     }
 
     return res;

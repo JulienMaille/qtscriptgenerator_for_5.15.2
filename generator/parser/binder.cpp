@@ -53,6 +53,42 @@
 
 #include <qdebug.h>
 
+// Qt 6: a trailing 'final' virt-specifier ("void f() final", recorded by the
+// parser) makes the function impossible to override in the generated shell
+// class. Walk the declarator chain because the specifier sits on the
+// declarator that carries the parameter list.
+static bool hasFinalSpecifier(DeclaratorAST *declarator)
+{
+  while (declarator)
+    {
+      if (declarator->final_specifier != 0)
+        return true;
+      declarator = declarator->sub_declarator;
+    }
+  return false;
+}
+
+// Qt 6: a function taking an rvalue reference ("T&&") cannot be called from a
+// generated binding: the binding only ever holds an lvalue, so the call is
+// ambiguous with the by-value / const& overload (C2668) or resolves to the
+// deleted copy operation (C2280). Qt 6.12 grew such overloads all over the API
+// (QJsonDocument(QJsonArray&&), QCryptographicHash::operator=(QCryptographicHash&&),
+// ...), each of them a companion of a const& overload that keeps the feature,
+// so dropping these functions loses no script-visible API. See
+// DeclaratorCompiler::visitPtrOperator.
+static bool hasRvalueReference(const DeclaratorCompiler &cc)
+{
+  if (cc.isRvalue())
+    return true;
+
+  foreach (DeclaratorCompiler::Parameter p, cc.parameters())
+    {
+      if (p.rvalue)
+        return true;
+    }
+  return false;
+}
+
 Binder::Binder(CodeModel *__model, LocationManager &__location, Control *__control)
   : _M_model(__model),
     _M_location(__location),
@@ -274,6 +310,15 @@ void Binder::declare_symbol(SimpleDeclarationAST *node, InitDeclaratorAST *init_
     {
       name_cc.run(id->unqualified_name);
 
+      // Qt 6: rvalue reference overloads are not bindable (see
+      // hasRvalueReference); keep them out of the model entirely.
+      if (hasRvalueReference(decl_cc))
+        {
+          std::cerr << "** WARNING skipping rvalue-reference function:"
+                    << qPrintable(name_cc.name()) << std::endl;
+          return;
+        }
+
       FunctionModelItem fun = model()->create<FunctionModelItem>();
       updateItemPosition (fun->toItem(), node);
       fun->setAccessPolicy(_M_current_access);
@@ -300,6 +345,7 @@ void Binder::declare_symbol(SimpleDeclarationAST *node, InitDeclaratorAST *init_
       }
       fun->setConstant(declarator->fun_cv != 0);
       fun->setException(exceptionSpecToString(declarator->exception_spec));
+      fun->setFinal(hasFinalSpecifier(init_declarator->declarator));
 
       fun->setTemplateParameters(_M_current_template_parameters);
       applyStorageSpecifiers(node->storage_specifiers, model_static_cast<MemberModelItem>(fun));
@@ -391,6 +437,15 @@ void Binder::visitFunctionDefinition(FunctionDefinitionAST *node)
 
   Q_ASSERT(! decl_cc.id().isEmpty());
 
+  // Qt 6: drop function definitions taking an rvalue reference, same reason as
+  // in declare_symbol (see hasRvalueReference).
+  if (hasRvalueReference(decl_cc))
+    {
+      std::cerr << "** WARNING skipping rvalue-reference function definition:"
+                << qPrintable(decl_cc.id()) << std::endl;
+      return;
+    }
+
   FunctionDefinitionModelItem
     old = changeCurrentFunction(_M_model->create<FunctionDefinitionModelItem>());
   _M_current_function->setScope(functionScope->qualifiedName());
@@ -410,6 +465,7 @@ void Binder::visitFunctionDefinition(FunctionDefinitionAST *node)
   _M_current_function->setConstant(declarator->fun_cv != 0);
   _M_current_function->setTemplateParameters(_M_current_template_parameters);
   _M_current_function->setException(exceptionSpecToString(declarator->exception_spec));
+  _M_current_function->setFinal(hasFinalSpecifier(init_declarator->declarator));
 
   applyStorageSpecifiers(node->storage_specifiers,
                           model_static_cast<MemberModelItem>(_M_current_function));

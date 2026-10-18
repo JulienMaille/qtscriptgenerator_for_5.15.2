@@ -1306,7 +1306,8 @@ bool Parser::parseDeclarator(DeclaratorAST *&node)
         token_stream.nextToken();  // skip ')'
 
         parseCvQualify(ast->fun_cv);
-        parseExceptionSpecification(ast->exception_spec);
+        ast->final_specifier = 0;
+        parseExceptionSpecification(ast->exception_spec, &ast->final_specifier);
 
         if (token_stream.lookAhead() == Token___attribute__)
           {
@@ -1425,7 +1426,8 @@ bool Parser::parseAbstractDeclarator(DeclaratorAST *&node)
         token_stream.nextToken();  // skip ')'
 
         parseCvQualify(ast->fun_cv);
-        parseExceptionSpecification(ast->exception_spec);
+        ast->final_specifier = 0;
+        parseExceptionSpecification(ast->exception_spec, &ast->final_specifier);
       }
   }
 
@@ -2294,9 +2296,13 @@ bool Parser::parseElaboratedTypeSpecifier(TypeSpecifierAST *&node)
   return false;
 }
 
-bool Parser::parseExceptionSpecification(ExceptionSpecificationAST *&node)
+bool Parser::parseExceptionSpecification(ExceptionSpecificationAST *&node,
+                                         std::size_t *final_specifier)
 {
   std::size_t start = token_stream.cursor();
+
+  if (final_specifier)
+    *final_specifier = 0;
 
   // C++11 support (Qt 5 headers): the legacy lexer emits these as plain
   // identifiers. If we don't consume them here, member declarations like
@@ -2331,6 +2337,14 @@ bool Parser::parseExceptionSpecification(ExceptionSpecificationAST *&node)
         }
       else if (id == QLatin1String("override") || id == QLatin1String("final"))
         {
+          // Qt 6: record a trailing 'final' ("void f() final"). The generator
+          // must not emit an override for such a function: the shell class
+          // derives from the C++ class, and MSVC rejects the override with
+          // C3248 (e.g. QXmlStreamEntityResolver::resolveEntity, final since
+          // Qt 6.12).
+          if (final_specifier && *final_specifier == 0
+              && id == QLatin1String("final"))
+            *final_specifier = token_stream.cursor();
           token_stream.nextToken();
           consumed = true;
         }

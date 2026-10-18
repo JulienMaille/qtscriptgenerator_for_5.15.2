@@ -692,6 +692,28 @@ static bool hasScriptValueConstructor(const QString &typeName)
 }
 
 /*!
+  Returns true if a value of the given \a typeName is converted by QtScript
+  itself, in front of the class prototype this generator registers.
+
+  QDate and QDateTime are such a case: QtScript has dedicated
+  QScriptEngine::toScriptValue() overloads that build a JavaScript Date, and
+  qScriptValueFromValue() resolves to them, so a returned value comes back as a
+  plain Date without a single generated method (QDate::year(),
+  QDateTime::date(), QDateTime::time(), ... all undefined for the caller).
+  Routing the return through a QVariant keeps the value inside the metatype
+  system, which is the path the constructor already takes, so the prototype
+  registered by qtscript_create_<Class>_class() is applied. QTime is listed for
+  symmetry with the rest of the date/time trio; its returns are converted the
+  same way and stay usable either way.
+*/
+static bool hasScriptDateConversion(const QString &typeName)
+{
+    return (typeName == QLatin1String("QDate"))
+            || (typeName == QLatin1String("QTime"))
+            || (typeName == QLatin1String("QDateTime"));
+}
+
+/*!
   Writes a function call.
 */
 static void writeFunctionCallAndReturn(QTextStream &stream, const AbstractMetaFunction *fun,
@@ -804,6 +826,14 @@ static void writeFunctionCallAndReturn(QTextStream &stream, const AbstractMetaFu
                     // declared metatype; route through QVariant (LongLong /
                     // ULongLong are built-in) to get an exact 64-bit value.
                     stream << "qScriptValueFromValue(context->engine(), QVariant::fromValue(_q_result));";
+                else if (hasScriptDateConversion(normRet))
+                    // Qt 6: qScriptValueFromValue() resolves to QtScript's own
+                    // QDateTime/QDate conversion and hands the caller a bare
+                    // JavaScript Date; the constructor path keeps the generated
+                    // prototype, so the return has to take the same route.
+                    // context->engine() rather than engine: both call shims
+                    // declare their engine parameter unnamed.
+                    stream << "context->engine()->newVariant(qVariantFromValue(_q_result));";
                 else
                     stream << "qScriptValueFromValue(context->engine(), _q_result);";
             } else {

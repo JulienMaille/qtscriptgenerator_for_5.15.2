@@ -101,7 +101,8 @@ public:
   bool parseEnumerator(EnumeratorAST *&node);
   bool parseEqualityExpression(ExpressionAST *&node,
 			       bool templArgs = false);
-  bool parseExceptionSpecification(ExceptionSpecificationAST *&node);
+  bool parseExceptionSpecification(ExceptionSpecificationAST *&node,
+				   std::size_t *final_specifier = 0);
   bool parseExclusiveOrExpression(ExpressionAST *&node,
 				  bool templArgs = false);
   bool parseExpression(ExpressionAST *&node);

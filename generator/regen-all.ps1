@@ -68,6 +68,18 @@ New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
 $env:QTDIR = $QtPrefix
 $env:PATH = (Join-Path $QtPrefix "bin") + ";" + $env:PATH
 
+# ... and from INCLUDE, which it hands to the legacy preprocessor (main.h).
+# build-generator.ps1 exports the MSVC and Windows SDK INCLUDE into its caller,
+# so a regen run in the same shell as a build resolves the STL headers Qt pulls
+# in (<string>, <type_traits>, ...). rpp then produces an 11.7 MB stream instead
+# of the 7.1 MB one and silently loses four QtCore classes - QByteArray,
+# QBitArray, QStringMatcher, QStringConverter - i.e. 80 classes instead of 84,
+# with nothing in the log to say so. The generation recipe is Qt only, and the
+# CI runs the two steps in separate shells, so clear the variable: a regen must
+# not depend on what built the generator.
+$savedInclude = $env:INCLUDE
+$env:INCLUDE = ''
+
 $masterInclude = "qtscript_masterinclude_qt6.h"
 Push-Location $generatorRoot
 try {
@@ -108,11 +120,22 @@ try {
     }
 } finally {
     Pop-Location
+    $env:INCLUDE = $savedInclude
 }
 
 if ($PublishRoot) {
     $PublishRoot = [System.IO.Path]::GetFullPath($PublishRoot)
     $generatedTarget = Join-Path $PublishRoot "generated_cpp"
+    # Replace, do not merge. Copy-Item leaves every file that is not part of this
+    # regen in place, so a class the generator did not produce - or no longer
+    # produces - survived in generated_cpp from an earlier run and was compiled
+    # and shipped as if it were current. That is what hid a class the generator
+    # had dropped: the build stayed green because the stale file was still
+    # there. The output root is wiped for the same reason.
+    if (Test-Path -LiteralPath $generatedTarget) {
+        Write-Host "Replacing $generatedTarget"
+        Remove-Item -LiteralPath $generatedTarget -Recurse -Force
+    }
     New-Item -ItemType Directory -Force -Path $generatedTarget | Out-Null
     Copy-Item -Path (Join-Path $OutputRoot "generated_cpp\*") -Destination $generatedTarget -Recurse -Force
     Write-Host "Published the generated projects to $generatedTarget"

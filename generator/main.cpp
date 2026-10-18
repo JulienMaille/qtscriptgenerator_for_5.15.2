@@ -209,6 +209,69 @@ int main(int argc, char *argv[])
                 "\\bQT_DEPRECATED_VERSION(_X)?_5\\s*\\(\\s*\\d+\\s*\\)\\s*");
             QString cleaned = code;
             cleaned.remove(leftover);
+            // Qt 6 addition: Qt 6 spells the same macro through a second paste
+            // level, QT_DEPRECATED_VERSION_X(6, 0, "text") ->
+            // QT_DEPRECATED_VERSION_X_6_0("text"), which the Qt 5 pattern above
+            // never matches. The Qt 6.12 QtCore headers alone leak a dozen of
+            // them, each one right in front of a member declaration
+            // (QKeyCombination::operator int(), makeReadyFuture(), ...). Remove
+            // the invocation whole, string- and paren-aware: one leaked
+            // IDENT("...") in a declaration list desynchronises the legacy
+            // parser and silently drops what follows.
+            {
+                const QString name = QLatin1String("QT_DEPRECATED_VERSION");
+                int pos = 0;
+                while ((pos = cleaned.indexOf(name, pos)) != -1) {
+                    if (pos > 0 && (cleaned.at(pos - 1).isLetterOrNumber()
+                                    || cleaned.at(pos - 1) == QLatin1Char('_'))) {
+                        pos += name.length();
+                        continue;
+                    }
+                    // The pasted suffix (_X_6_0, _6_10, ...) follows the name.
+                    int i = pos + name.length();
+                    while (i < cleaned.length()
+                           && (cleaned.at(i).isLetterOrNumber() || cleaned.at(i) == QLatin1Char('_')))
+                        ++i;
+                    int open = i;
+                    while (open < cleaned.length() && cleaned.at(open).isSpace())
+                        ++open;
+                    if (open >= cleaned.length() || cleaned.at(open) != QLatin1Char('(')) {
+                        pos = i;
+                        continue;
+                    }
+                    int depth = 0;
+                    bool inString = false;
+                    int j = open;
+                    for (; j < cleaned.length(); ++j) {
+                        const QChar c = cleaned.at(j);
+                        if (inString) {
+                            if (c == QLatin1Char('\\'))
+                                ++j;
+                            else if (c == QLatin1Char('"'))
+                                inString = false;
+                            continue;
+                        }
+                        if (c == QLatin1Char('"'))
+                            inString = true;
+                        else if (c == QLatin1Char('('))
+                            ++depth;
+                        else if (c == QLatin1Char(')')) {
+                            --depth;
+                            if (depth == 0)
+                                break;
+                        }
+                    }
+                    if (depth != 0) {
+                        pos = i;
+                        continue; // unbalanced; leave alone
+                    }
+                    int end = j + 1;
+                    while (end < cleaned.length()
+                           && (cleaned.at(end) == QLatin1Char(' ') || cleaned.at(end) == QLatin1Char('\t')))
+                        ++end;
+                    cleaned.remove(pos, end - pos);
+                }
+            }
             QRegularExpression adlLeak(
                 "^[ \\t]*\\bMAKE_ADL_TEST\\s*\\([^()\\n]*\\)[ \\t]*\\r?$",
                 QRegularExpression::MultilineOption);
