@@ -10,22 +10,29 @@
 //     (`<rejection class="QByteArray" function-name="contains"/>` in
 //     generator/typesystem_core-qtscript.xml), and the reject log files both
 //     overloads under "Generation disabled by type system" on both lines;
-//   - QPolygon.push_back/prepend/insert/fill/contains/indexOf: take a dependent
-//     alias (parameter_type) or QList::AT that the builder cannot resolve;
-//   - QPolygon.mid() is callable but hands back a value with no members at all.
+//   - QPolygon.insert: the curated typesystem removes it for the class QList
+//     (`<rejection class="QList" function-name="insert"/>`), so it is a decision
+//     and not a loss;
+//   - QPolygon.contains/indexOf/lastIndexOf: QListSpecialMethods declares them as
+//     function templates over QList::AT, which the flattening cannot instantiate
+//     (the remaining P-D2 part of the gap);
+//   - the QList `rvalue_ref` twins (prepend/push_back/push_front/replace/operator+=
+//     with a `T &&` parameter): callable only with an rvalue, so the wrapper
+//     cannot call them. Refused by name, not silently;
+//   - QPolygon.mid() is callable and hands back a plain JavaScript Array of
+//     points, not a QList wrapper: a `QList<T>` return has no wrapper of its own
+//     and the emitter converts it with qScriptValueFromSequence. Indexing works
+//     (`mid(1)[0]`), the QList members do not exist on the result.
 function check(condition, message) {
     if (!condition)
         throw new Error(message);
 }
 
-// A known gap is asserted so that fixing it turns this suite red: that failure
-// is the reminder to delete the assertion and test the fixed behaviour instead.
-// The condition is the behaviour the fix must produce, so it must be false while
-// the gap is open.
-function checkKnownGap(condition, gap, message) {
-    if (condition)
-        throw new Error(gap + " looks fixed, delete this assertion and test it: " + message);
-}
+// A gap that is still open is asserted as the *absence* of the fixed behaviour,
+// so that fixing it turns this suite red and forces the assertion to be replaced
+// by the positive one. The QList element-typed members were asserted that way
+// until the P-D1 fix recovered them; the block below the QPolygon section now
+// carries their positive assertions instead.
 
 // --- QPolygon / QPolygonF: the QList-derived surface that resolving the
 // class-scoped type aliases (value_type) recovered. at(), takeFirst() and
@@ -53,14 +60,56 @@ check(floats.boundingRect().width() === 2, "QPolygonF.boundingRect() failed");
 check(floats.takeLast().x() === 3 && floats.size() === 1, "QPolygonF.takeLast() failed");
 check(floats.takeFirst().y() === 2 && floats.size() === 0, "QPolygonF.takeFirst() failed");
 
-// --- Known gap (audit option C): the append() overloads take a dependent alias
-// (parameter_type / const_reference) that the builder cannot resolve, so the
-// call matches an overload that appends nothing -- with a point as well as with
-// a QPolygon, which is the part a script author cannot see.
+// --- QList's element-typed members (audit P-D1): qlist.h spells append,
+// prepend, push_back, push_front, fill, replace, startsWith and endsWith with
+// parameter_type, whose target (QArrayDataPointer::parameter_type) depends on the
+// element type and cannot be named. The generator now binds that alias to its
+// Q_QDOC spelling `const T &`, which is what pass_parameter_by_value selects for
+// a QPoint, a QPointF, a QItemSelectionRange or a QXmlStreamAttribute. Before the
+// fix the member was dropped as an unmatched type, so append() matched the
+// QList-taking overload instead and grew nothing - the silent failure this
+// block used to assert as a known gap.
 var appended = new QPolygon();
 appended.append(new QPoint(7, 8));
-checkKnownGap(appended.size() === 1, "QPolygon.append() silently drops its argument",
-    "appending a point must grow the polygon");
+check(appended.size() === 1, "QPolygon.append(QPoint) must grow the polygon");
+appended.prepend(new QPoint(1, 2));
+check(appended.size() === 2 && appended.first().x() === 1, "QPolygon.prepend(QPoint) failed");
+appended.push_back(new QPoint(3, 4));
+check(appended.size() === 3 && appended.last().x() === 3, "QPolygon.push_back(QPoint) failed");
+appended.push_front(new QPoint(5, 6));
+check(appended.size() === 4 && appended.first().x() === 5, "QPolygon.push_front(QPoint) failed");
+check(appended.startsWith(new QPoint(5, 6)), "QPolygon.startsWith(QPoint) failed");
+check(appended.endsWith(new QPoint(3, 4)), "QPolygon.endsWith(QPoint) failed");
+appended.replace(0, new QPoint(9, 9));
+check(appended.at(0).x() === 9, "QPolygon.replace(QPoint) failed");
+appended.fill(new QPoint(2, 2), 2);
+check(appended.size() === 2 && appended.at(1).x() === 2, "QPolygon.fill(QPoint, size) failed");
+appended.assign(3, new QPoint(4, 4));
+check(appended.size() === 3 && appended.at(2).x() === 4, "QPolygon.assign(count, QPoint) failed");
+
+// The same members on the attributes list (core). append() is deliberately not
+// among them: the flattening skips a copied member whose name the subclass
+// already declares, and QXmlStreamAttributes declares append(QString, QString).
+var attributes = new QXmlStreamAttributes();
+attributes.append("k", "v");
+check(attributes.size() === 1, "QXmlStreamAttributes.append(QString, QString) failed");
+check(attributes.startsWith(new QXmlStreamAttribute("k", "v")),
+      "QXmlStreamAttributes.startsWith failed");
+check(!attributes.startsWith(new QXmlStreamAttribute("x", "y")),
+      "QXmlStreamAttributes.startsWith must compare the attribute");
+attributes.prepend(new QXmlStreamAttribute("p", "q"));
+check(attributes.size() === 2 && attributes.at(0).name() === "p",
+      "QXmlStreamAttributes.prepend failed");
+attributes.replace(0, new QXmlStreamAttribute("r", "s"));
+check(attributes.at(0).name() === "r", "QXmlStreamAttributes.replace failed");
+attributes.fill(new QXmlStreamAttribute("f", "g"), 3);
+check(attributes.size() === 3 && attributes.at(2).value() === "g",
+      "QXmlStreamAttributes.fill failed");
+// assign() returns the container itself, spelled with the injected class name in
+// qlist.h (`QList &assign(...)`). The wrapper only compiles once the template
+// instantiation is filled in, and the value arrives as an Array of attributes.
+var assigned = attributes.assign(2, new QXmlStreamAttribute("a", "b"));
+check(attributes.size() === 2 && assigned.length === 2, "QXmlStreamAttributes.assign failed");
 
 // --- QByteArray
 var bytes = new QByteArray("sample");
