@@ -8,9 +8,10 @@
 // still being isolated (see the reject log, generator/mjb_rejected_functions.log):
 //   - QByteArray.left/right/mid/first/last/sliced/toUpper/toLower: dropped in
 //     qbytearray.h, where the active branch declares them [[nodiscard]] ... const &;
-//   - QByteArray.contains: dropped on both lines although its declaration is
-//     not ref-qualified; the preprocessor keeps `[[nodiscard]] bool
-//     contains(char c) const noexcept`, so this is a third cause, not P-B's;
+//   - QByteArray.contains: not a loss at all. The curated typesystem rejects it
+//     (`<rejection class="QByteArray" function-name="contains"/>` in
+//     generator/typesystem_core-qtscript.xml), and the reject log files both
+//     overloads under "Generation disabled by type system" on both lines;
 //   - QPolygon.push_back/prepend/insert/fill/contains/indexOf: take a dependent
 //     alias (parameter_type) or QList::AT that the builder cannot resolve;
 //   - QPolygon.mid() is callable but hands back a value with no members at all.
