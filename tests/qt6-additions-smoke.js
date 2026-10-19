@@ -136,8 +136,17 @@ check(QFileDevice.MemoryMapFlag.NoOptions !== undefined
       && QFileDevice.MemoryMapFlag.MapPrivateOption !== undefined,
       "QFileDevice::MemoryMapFlag (Qt 5 MemoryMapFlags) was not exported");
 
-check(typeof QBasicReadWriteLock !== "undefined",
-      "QBasicReadWriteLock, the base that carries the QReadWriteLock members, was not exported");
+// QBasicReadWriteLock is the base class Qt 6.11 introduced to carry lockForRead,
+// lockForWrite and unlock; up to 6.10 QReadWriteLock declares those members
+// itself and no such class exists, so only this class check is versioned. The
+// members below stay unguarded on purpose: a script has to reach them whichever
+// class declares them, and that is the part P-A was about.
+if (typeof QBasicReadWriteLock !== "undefined") {
+    check(typeof QBasicReadWriteLock.prototype.lockForRead === "function"
+          && typeof QBasicReadWriteLock.prototype.lockForWrite === "function"
+          && typeof QBasicReadWriteLock.prototype.unlock === "function",
+          "QBasicReadWriteLock must expose the members QReadWriteLock inherits");
+}
 var readWriteLock = new QReadWriteLock();
 readWriteLock.lockForRead();
 readWriteLock.unlock();
@@ -145,4 +154,4 @@ readWriteLock.lockForWrite();
 readWriteLock.unlock();
 check(typeof readWriteLock.tryLockForRead === "function"
       && typeof readWriteLock.tryLockForWrite === "function",
-      "QReadWriteLock must expose the members it inherits from QBasicReadWriteLock");
+      "QReadWriteLock must expose lockForRead, lockForWrite, unlock and the tryLock members");
