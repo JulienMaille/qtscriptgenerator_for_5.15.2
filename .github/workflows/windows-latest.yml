@@ -113,7 +113,9 @@ jobs:
       - name: Upload generated projects
         # Kept on failure too: comparing the generated tree of one Qt version
         # against another is how a cross-version generation difference is
-        # diagnosed.
+        # diagnosed. The reject logs travel with it, one directory per module:
+        # they are what explains a difference in the tree, and the per-module
+        # budget the gate reads is built from them.
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -121,5 +123,6 @@ jobs:
           path: |
             generated_cpp/**
             regen-test/qtbindings/**
+            regen-test/logs/**
           if-no-files-found: error
           retention-days: 3

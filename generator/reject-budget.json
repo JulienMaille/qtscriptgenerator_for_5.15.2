@@ -1,0 +1,84 @@
+{
+    "$comment":  "Upper bound of mjb_rejected_functions.log entries, per module and reason. Seeded with tools/reject-budget.ps1 -Update from Qt 6.12 and Qt 6.8.3; the larger count wins so one file serves both lines. A count that grows is a member the bindings lost and fails the check; a count that shrinks means the bound is loose and should be tightened with -Update.",
+    "core":  {
+                 "Generation disabled by type system":  194,
+                 "Not in type system":  0,
+                 "Only callable with an rvalue (rvalue reference parameter, or '&&' ref-qualifier)":  31,
+                 "Return type is deduced ('auto'), not nameable":  70,
+                 "Type redefined to not be a class":  0,
+                 "Unmatched argument type":  515,
+                 "Unmatched return type":  542
+             },
+    "gui":  {
+                "Generation disabled by type system":  194,
+                "Not in type system":  0,
+                "Only callable with an rvalue (rvalue reference parameter, or '&&' ref-qualifier)":  31,
+                "Return type is deduced ('auto'), not nameable":  70,
+                "Type redefined to not be a class":  0,
+                "Unmatched argument type":  515,
+                "Unmatched return type":  542
+            },
+    "network":  {
+                    "Generation disabled by type system":  123,
+                    "Not in type system":  0,
+                    "Only callable with an rvalue (rvalue reference parameter, or '&&' ref-qualifier)":  23,
+                    "Return type is deduced ('auto'), not nameable":  61,
+                    "Type redefined to not be a class":  0,
+                    "Unmatched argument type":  439,
+                    "Unmatched return type":  524
+                },
+    "printsupport":  {
+                         "Generation disabled by type system":  371,
+                         "Not in type system":  0,
+                         "Only callable with an rvalue (rvalue reference parameter, or '&&' ref-qualifier)":  31,
+                         "Return type is deduced ('auto'), not nameable":  194,
+                         "Type redefined to not be a class":  0,
+                         "Unmatched argument type":  874,
+                         "Unmatched return type":  706
+                     },
+    "sql":  {
+                "Generation disabled by type system":  205,
+                "Not in type system":  0,
+                "Only callable with an rvalue (rvalue reference parameter, or '&&' ref-qualifier)":  31,
+                "Return type is deduced ('auto'), not nameable":  78,
+                "Type redefined to not be a class":  0,
+                "Unmatched argument type":  533,
+                "Unmatched return type":  548
+            },
+    "svg":  {
+                "Generation disabled by type system":  367,
+                "Not in type system":  0,
+                "Only callable with an rvalue (rvalue reference parameter, or '&&' ref-qualifier)":  31,
+                "Return type is deduced ('auto'), not nameable":  192,
+                "Type redefined to not be a class":  0,
+                "Unmatched argument type":  886,
+                "Unmatched return type":  726
+            },
+    "uitools":  {
+                    "Generation disabled by type system":  364,
+                    "Not in type system":  0,
+                    "Only callable with an rvalue (rvalue reference parameter, or '&&' ref-qualifier)":  31,
+                    "Return type is deduced ('auto'), not nameable":  190,
+                    "Type redefined to not be a class":  0,
+                    "Unmatched argument type":  864,
+                    "Unmatched return type":  701
+                },
+    "widgets":  {
+                    "Generation disabled by type system":  363,
+                    "Not in type system":  0,
+                    "Only callable with an rvalue (rvalue reference parameter, or '&&' ref-qualifier)":  31,
+                    "Return type is deduced ('auto'), not nameable":  189,
+                    "Type redefined to not be a class":  0,
+                    "Unmatched argument type":  862,
+                    "Unmatched return type":  700
+                },
+    "xml":  {
+                "Generation disabled by type system":  100,
+                "Not in type system":  0,
+                "Only callable with an rvalue (rvalue reference parameter, or '&&' ref-qualifier)":  23,
+                "Return type is deduced ('auto'), not nameable":  39,
+                "Type redefined to not be a class":  0,
+                "Unmatched argument type":  363,
+                "Unmatched return type":  482
+            }
+}

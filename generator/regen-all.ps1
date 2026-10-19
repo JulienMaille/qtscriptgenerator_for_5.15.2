@@ -80,6 +80,22 @@ $env:PATH = (Join-Path $QtPrefix "bin") + ";" + $env:PATH
 $savedInclude = $env:INCLUDE
 $env:INCLUDE = ''
 
+# The generator writes its reject logs into its own working directory, and every
+# module overwrites them: after a nine-module regen only the last module's file
+# was left, and reading it as if it covered the whole run is how a module's
+# rejections disappeared from view. Collect them per module instead, next to the
+# tree they describe, so the reject budget (one number per module) has an
+# unambiguous input.
+$logNames = @(
+    "mjb_rejected_classes.log",
+    "mjb_rejected_enums.log",
+    "mjb_rejected_functions.log",
+    "mjb_rejected_fields.log",
+    "mjb_lost_template_functions.log",
+    "mjb_traced_functions.log"
+)
+$logRoot = Join-Path $OutputRoot "logs"
+
 $masterInclude = "qtscript_masterinclude_qt6.h"
 Push-Location $generatorRoot
 try {
@@ -90,6 +106,12 @@ try {
         }
 
         Write-Host "--- generating $module ---"
+        # A failed run throws below and keeps its logs in the generator directory,
+        # which is where they are needed for the diagnosis; clearing them first
+        # guarantees that what is collected afterwards belongs to this module.
+        foreach ($name in $logNames) {
+            Remove-Item -LiteralPath (Join-Path $generatorRoot $name) -Force -ErrorAction SilentlyContinue
+        }
         # Invoke through cmd.exe with stderr merged there: the generator reports
         # every preprocessor notice on stderr, and a caller that redirects
         # streams (2>&1) while $ErrorActionPreference is 'Stop' turns the first
@@ -100,6 +122,21 @@ try {
         & cmd.exe /d /c $commandLine
         if ($LASTEXITCODE -ne 0) {
             throw "The generator failed for module '$module' (exit code $LASTEXITCODE)"
+        }
+
+        # Collect the logs here, before the next module overwrites them in the
+        # generator directory. They are moved, not copied: leaving a copy behind
+        # is what made the last module's file look like the run's summary.
+        $moduleLogDir = Join-Path $logRoot $module
+        if (Test-Path -LiteralPath $moduleLogDir) {
+            Remove-Item -LiteralPath $moduleLogDir -Recurse -Force
+        }
+        New-Item -ItemType Directory -Force -Path $moduleLogDir | Out-Null
+        foreach ($name in $logNames) {
+            $source = Join-Path $generatorRoot $name
+            if (Test-Path -LiteralPath $source) {
+                Move-Item -LiteralPath $source -Destination (Join-Path $moduleLogDir $name) -Force
+            }
         }
 
         $moduleDir = Join-Path $OutputRoot "generated_cpp\com_trolltech_qt_$module"
@@ -142,3 +179,4 @@ if ($PublishRoot) {
 }
 
 Write-Host "Generated $($Modules.Count) modules into $OutputRoot"
+Write-Host "Reject logs per module: $logRoot"
