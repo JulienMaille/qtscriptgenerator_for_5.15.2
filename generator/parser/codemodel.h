@@ -326,6 +326,11 @@ protected:
 private:
   QHash<QString, ClassModelItem> _M_classes;
   QHash<QString, EnumModelItem> _M_enums;
+  // Declaration order of the enums, kept next to the name -> item map: the
+  // map is a QHash and its values() order is seeded, which made enum output
+  // differ from run to run and, worse, broke cross-enum value resolution
+  // (QSizePolicy::Policy::Minimum = GrowFlag from PolicyFlag).
+  EnumList _M_enumOrder;
   QHash<QString, TypeAliasModelItem> _M_typeAliases;
   QHash<QString, VariableModelItem> _M_variables;
   QMultiHash<QString, FunctionDefinitionModelItem> _M_functionDefinitions;

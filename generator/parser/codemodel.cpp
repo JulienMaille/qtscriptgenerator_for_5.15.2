@@ -437,7 +437,7 @@ FunctionDefinitionList _ScopeModelItem::functionDefinitions() const
 
 EnumList _ScopeModelItem::enums() const
 {
-  return _M_enums.values();
+  return _M_enumOrder;
 }
 
 void _ScopeModelItem::addClass(ClassModelItem item)
@@ -471,6 +471,17 @@ void _ScopeModelItem::addTypeAlias(TypeAliasModelItem item)
 
 void _ScopeModelItem::addEnum(EnumModelItem item)
 {
+  // Keep declaration order: an enumerator may name a constant of an enum
+  // declared earlier in the same class, and figureOutEnumValues() resolves it
+  // against the values already computed in enums() order.
+  for (int i = 0; i < _M_enumOrder.size(); ++i) {
+    if (_M_enumOrder.at(i)->name() == item->name()) {
+      _M_enumOrder[i] = item;
+      _M_enums.insert(item->name(), item);
+      return;
+    }
+  }
+  _M_enumOrder.append(item);
   _M_enums.insert(item->name(), item);
 }
 
@@ -536,6 +547,13 @@ void _ScopeModelItem::removeEnum(EnumModelItem item)
 
   if (it != _M_enums.end() && it.value() == item)
     _M_enums.erase(it);
+
+  for (int i = 0; i < _M_enumOrder.size(); ++i) {
+    if (_M_enumOrder.at(i) == item) {
+      _M_enumOrder.removeAt(i);
+      break;
+    }
+  }
 }
 
 ClassModelItem _ScopeModelItem::findClass(const QString &name) const
