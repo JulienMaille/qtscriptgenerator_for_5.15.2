@@ -1955,7 +1955,23 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
              || function_item->functionType() == CodeModel::Signal
              || function_item->functionType() == CodeModel::Slot);
 
-    if (function_item->isFriend())
+    // Friend functions are namespace-scope, not members, and binding one as a
+    // member would emit a call with an implicit 'this' that does not exist, so
+    // they are skipped here. The exception is an in-class hidden friend
+    // *definition* -- constexpr friend inline QVector2D operator+(QVector2D,
+    // QVector2D) -- which takes the enclosing class as its first argument and
+    // is turned into a friendly free call by the block below. Before the F2
+    // parser fix an unconsumed function-specifier defeated the parse of exactly
+    // these definitions, and the recovered declaration arrived here without the
+    // friend flag; now that the flag survives, the exception must be explicit.
+    // A pointer first argument (friend bool operator==(QKeyEvent *,
+    // QKeySequence::StandardKey)) is excluded: the conversion below would drop
+    // it and pass the object where a pointer is expected.
+    if (function_item->isFriend()
+        && !(function_item->isInline()
+             && function_item->name().startsWith(QLatin1String("operator"))
+             && !function_item->arguments().isEmpty()
+             && function_item->arguments().at(0)->type().indirections() == 0))
         return 0;
 
     // Qt 6: hidden friends (e.g. constexpr friend inline QVector2D
@@ -2295,6 +2311,12 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
             *meta_function += AbstractMetaAttributes::Friendly;
         }
     }
+
+    // A friend that passed the gate above but matches none of the hidden-friend
+    // shapes (e.g. a stream operator) has no implicit self argument: drop it
+    // rather than emit a member call that cannot compile.
+    if (function_item->isFriend() && !meta_function->isFriendly())
+        return 0;
 
     return meta_function;
 }

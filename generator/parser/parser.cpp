@@ -3518,16 +3518,28 @@ bool Parser::parseDeclarationInternal(DeclarationAST *&node)
   parseWinDeclSpec(winDeclSpec);
 
   const ListNode<std::size_t> *funSpec = 0;
-  bool hasFunSpec = parseFunctionSpecifier(funSpec);
+  parseFunctionSpecifier(funSpec);
 
   const ListNode<std::size_t> *cv = 0;
   parseCvQualify(cv);
 
   const ListNode<std::size_t> *storageSpec = 0;
-  bool hasStorageSpec = parseStorageClassSpecifier(storageSpec);
+  parseStorageClassSpecifier(storageSpec);
 
-  if (hasStorageSpec && !hasFunSpec)
-    hasFunSpec = parseFunctionSpecifier(funSpec);
+  // Qt 6 (audit, F2): the declaration specifiers are order-free in C++, and Qt 6
+  // uses both orders around the storage class:
+  //     constexpr static inline int dotProduct(...)  // qpoint.h
+  //     static constexpr inline int dotProduct(...)  // qquaternion.h
+  // Consuming the function-specifiers only *before* the storage-class specifier
+  // (and after it only when none had been seen) left the trailing one
+  // unconsumed in the first spelling. The type specifier that followed then
+  // failed, the declaration was dropped by reportDroppedDeclaration(), and the
+  // error recovery re-parsed the member from the leftover specifier: a fresh
+  // declaration whose storage_specifiers were empty, so a static member was
+  // bound as an instance one - QPoint::dotProduct could be called through an
+  // object but not on the class. Both passes are unconditional: each consumes
+  // only tokens that necessarily belong to the head of the declaration.
+  parseFunctionSpecifier(funSpec);
 
   // that is for the case 'friend __declspec(dllexport) ....'
   parseWinDeclSpec(winDeclSpec);
@@ -3671,8 +3683,8 @@ bool Parser::parseDeclarationInternal(DeclarationAST *&node)
     {
       Q_ASSERT(spec != 0);
 
-      if (!hasFunSpec)
-        parseFunctionSpecifier(funSpec);         // e.g. "void inline"
+      // Order-free as well: "int constexpr", "void inline".
+      parseFunctionSpecifier(funSpec);
 
       spec->cv = cv;
 
