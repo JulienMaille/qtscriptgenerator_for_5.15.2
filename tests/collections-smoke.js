@@ -111,9 +111,13 @@ check(new QByteArray("a  b   c").simplified().toString() === "a b c",
       "QByteArray.simplified() failed");
 // The trailing NUL nullTerminated() appends does not survive the binding's
 // value conversion (the returned QByteArray comes back as a 6-byte "sample"),
-// so only the content is asserted here.
-check(sample.nullTerminated().toString() === "sample",
-      "QByteArray.nullTerminated() failed");
+// so only the content is asserted here. Qt 6.8 LTS has no such member at all
+// (its qbytearray.h ends at nullTerminate()), so this one check is versioned
+// rather than dropped: on a line that has it, asking for it must work.
+if (typeof sample.nullTerminated === "function") {
+    check(sample.nullTerminated().toString() === "sample",
+          "QByteArray.nullTerminated() failed");
+}
 check(new QByteArray("a%20b").percentDecoded().toString() === "a b",
       "QByteArray.percentDecoded() failed");
 
