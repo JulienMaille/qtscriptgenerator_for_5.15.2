@@ -242,50 +242,82 @@ bool Parser::skipUntil(int token)
   return false;
 }
 
+// Tokens that can begin a declaration (or a class member). Error recovery skips
+// forward to the next one of these, so a token missing from the set is not
+// skipped - it is *consumed*, and what it said is lost with it. A consumed
+// 'static' leaves the member behind it in the code model without its storage
+// specifier: that is how QUuid::createUuid came to be bound as an instance
+// method, being the member right after a declaration the parser rejected. The
+// same holds for 'inline', the access specifiers, and Qt's own Q_INVOKABLE.
+static bool tokenCanStartDeclaration(int tk)
+{
+  switch (tk)
+    {
+    case ';':
+    case '~':
+    case Token_scope:
+    case Token_identifier:
+    case Token_operator:
+    case Token_class:
+    case Token_enum:
+    case Token_struct:
+    case Token_union:
+    case Token_typedef:
+    case Token_using:
+    case Token_namespace:
+    case Token_template:
+    case Token_asm:
+    case Token_export:
+    case Token_auto:
+    case Token_typename:
+    case Token_char:
+    case Token_wchar_t:
+    case Token_bool:
+    case Token_short:
+    case Token_int:
+    case Token_long:
+    case Token_signed:
+    case Token_unsigned:
+    case Token_float:
+    case Token_double:
+    case Token_void:
+
+    case Token_static:      // storage class
+    case Token_extern:
+    case Token_register:
+    case Token_mutable:
+
+    case Token_inline:      // function specifiers
+    case Token_virtual:
+    case Token_explicit:
+    case Token_friend:
+
+    case Token_const:       // cv
+    case Token_volatile:
+
+    case Token_public:      // access specifiers
+    case Token_protected:
+    case Token_private:
+    case Token_signals:     // Qt
+    case Token_slots:
+    case Token_Q_ENUMS:
+    case Token_Q_INVOKABLE:
+
+      return true;
+
+    default:
+      return false;
+    }
+}
+
 bool Parser::skipUntilDeclaration()
 {
   while (token_stream.lookAhead())
     {
+      if (tokenCanStartDeclaration(token_stream.lookAhead()))
+        return true;
 
-      switch(token_stream.lookAhead())
-        {
-        case ';':
-        case '~':
-        case Token_scope:
-        case Token_identifier:
-        case Token_operator:
-        case Token_char:
-        case Token_wchar_t:
-        case Token_bool:
-        case Token_short:
-        case Token_int:
-        case Token_long:
-        case Token_signed:
-        case Token_unsigned:
-        case Token_float:
-        case Token_double:
-        case Token_void:
-        case Token_extern:
-        case Token_namespace:
-        case Token_using:
-        case Token_typedef:
-        case Token_asm:
-        case Token_template:
-        case Token_export:
-
-        case Token_const:       // cv
-        case Token_volatile:    // cv
-
-        case Token_public:
-        case Token_protected:
-        case Token_private:
-        case Token_signals:      // Qt
-        case Token_slots:        // Qt
-          return true;
-
-        default:
-          token_stream.nextToken();
-        }
+      token_stream.nextToken();
     }
 
   return false;
@@ -2148,14 +2180,7 @@ bool Parser::parseClassSpecifier(TypeSpecifierAST *&node)
               else
                 {
                   if (depth == 0
-                      && (tk == ';'
-                          || tk == '~' || tk == Token_scope || tk == Token_identifier
-                          || tk == Token_operator || tk == Token_char || tk == Token_wchar_t
-                          || tk == Token_bool || tk == Token_short || tk == Token_int
-                          || tk == Token_long || tk == Token_signed || tk == Token_unsigned
-                          || tk == Token_float || tk == Token_double || tk == Token_void
-                          || tk == Token_extern || tk == Token_namespace || tk == Token_using
-                          || tk == Token_typedef))
+                      && tokenCanStartDeclaration(tk))
                     break;
                   token_stream.nextToken();
                 }
