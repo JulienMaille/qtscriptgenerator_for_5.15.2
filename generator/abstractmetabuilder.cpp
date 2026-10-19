@@ -2996,6 +2996,9 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
     }
 
     AbstractMetaFunctionList funcs = subclass->functions();
+    // Functions added by this loop, so the duplicate check below sees the
+    // copies already inherited into the subclass.
+    AbstractMetaFunctionList inherited;
 
     // Qt 6 (audit, P-D): a member of a container template can spell its return
     // type or an argument with the injected class name (`QList &assign(...)`,
@@ -3109,6 +3112,32 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
             continue;
         }
 
+        // Qt 6 (audit, F5.1): the same member can be listed twice in the
+        // template. QList declares fill(size_type, const T &) in the class body
+        // and defines QList<T>::fill(QList<T>::size_type newSize, ...) out of
+        // class; declaredFunction() pairs a declaration with its definition via
+        // isSimilar(), which compares the spelled types as strings, so on 6.8 LTS
+        // the pair is not merged. Both copies then pick up the same signature
+        // below, and the emitter writes two identical overloads whose guards
+        // require a qsizetype conversion that a script number never satisfies:
+        // the member answers "could not find a function match". Keep the first
+        // copy; the signature is the C++ one, after substitution.
+        const QString inheritedSignature = f->minimalSignature();
+        bool duplicate = false;
+        foreach (AbstractMetaFunction *seen, inherited) {
+            if (seen->minimalSignature() == inheritedSignature) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (duplicate) {
+            m_lost_template_functions << QString("%1 <- %2::%3() : duplicate signature '%4' (declared twice in the template)")
+                                          .arg(subclass->name(), template_class->name(), function->name(),
+                                               inheritedSignature);
+            delete f;
+            continue;
+        }
+
         ComplexTypeEntry *te = subclass->typeEntry();
         FunctionModificationList mods = function->modifications(template_class);
         for (int i=0; i<mods.size(); ++i) {
@@ -3134,6 +3163,7 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
         }
 
         subclass->addFunction(f);
+        inherited << f;
     }
 
     // P-E (audit): report every template member the subclass still does not
