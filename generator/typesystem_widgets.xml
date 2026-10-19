@@ -363,7 +363,6 @@
  <enum-type name="QAction::SoftKeyRole"/>
   <enum-type name="QGraphicsEffect::ChangeFlag" flags="QGraphicsEffect::ChangeFlags"/>
   <enum-type name="QGraphicsItem::PanelModality"/>
-  <enum-type name="QPinchGesture::WhatChange" flags="QPinchGesture::WhatChanged"/>
   <enum-type name="QStyle::RequestSoftwareInputPanel"/>
   <enum-type name="QSwipeGesture::SwipeDirection"/>
   
@@ -3932,7 +3931,9 @@
   <enum-type name="QGesture::GestureCancelPolicy"/>
   <enum-type name="QGraphicsEffect::PixmapPadMode"/>
   <enum-type name="QGraphicsBlurEffect::BlurHint" flags="QGraphicsBlurEffect::BlurHints"/>
-  <enum-type name="QPinchGesture::ChangeFlag" flags="QPinchGesture::ChangeFlags"/>
+  <!-- QPinchGesture stays unbound (see the commented object-type above), so its
+       ChangeFlag/WhatChange entries were dead too; WhatChange does not even
+       exist in Qt 6's qgesture.h (only ChangeFlag does). -->
   <rejection class="QAccessibleActionInterface"/>
   <rejection class="QAccessibleImageInterface"/>
 
