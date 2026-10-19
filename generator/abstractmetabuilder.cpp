@@ -1857,6 +1857,36 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
         return 0;
     }
 
+    // Qt 6: a function whose return type is written 'auto' has no return type
+    // the generator can name. The parser files the placeholder as a storage
+    // class (Parser::parseStorageClassSpecifier), no type specifier follows, and
+    // the builder types the result as the enclosing class. For a member that
+    // returns something else - QJsonObject::asKeyValueRange() (qjsonobject.h)
+    // hands back QtPrivate::QKeyValueRange<...> - the wrapper then emits
+    // 'QJsonObject _q_result = _q_self->asKeyValueRange();', which does not
+    // compile. Whatever the member returns cannot be bound, so it is refused by
+    // name. This is independent of the ref-qualifier work: it also covers the
+    // 'template <typename> static constexpr auto qt_create_metaobjectdata();'
+    // that the Q_OBJECT macro plants in every generated class.
+    if (function_item->isAuto()) {
+        m_rejected_functions.insert(class_name + "::" + rejectedFunctionSignature(function_item),
+                                    DeducedReturnType);
+        return 0;
+    }
+
+    // Qt 6: a member declared only with an rvalue ref-qualifier
+    // (QBitArray::inverted_inplace() &&) needs an rvalue receiver. The wrapper
+    // the generator emits calls through a pointer, an lvalue, so that call would
+    // not compile - and no script could reach the member either, since a script
+    // object is an lvalue too. It is refused here, by name, so the member is
+    // counted instead of vanishing: the alternative, leaving the declaration to
+    // fail in the parser, kept only a warning on stderr and nothing in this log.
+    if (function_item->isRvalueRefQualified()) {
+        m_rejected_functions.insert(class_name + "::" + rejectedFunctionSignature(function_item),
+                                    RequiresRvalue);
+        return 0;
+    }
+
 
     Q_ASSERT(function_item->functionType() == CodeModel::Normal
              || function_item->functionType() == CodeModel::Signal
@@ -3279,6 +3309,14 @@ static void write_reject_log_file(const QString &name,
 
         case AbstractMetaBuilder::UnmatchedArgumentType:
             s << "Unmatched argument type";
+            break;
+
+        case AbstractMetaBuilder::DeducedReturnType:
+            s << "Return type is deduced ('auto'), not nameable";
+            break;
+
+        case AbstractMetaBuilder::RequiresRvalue:
+            s << "Only callable on an rvalue (ref-qualified '&&')";
             break;
 
         default:

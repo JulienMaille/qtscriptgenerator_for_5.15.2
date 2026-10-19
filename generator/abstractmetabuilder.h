@@ -58,6 +58,18 @@ public:
         RedefinedToNotClass,
         UnmatchedArgumentType,
         UnmatchedReturnType,
+        // Qt 6: a function whose return type is written 'auto' (QJsonObject
+        // asKeyValueRange(), qjsonobject.h) has no return type the generator can
+        // name. The placeholder is filed as a storage class, no type specifier
+        // follows, and the builder types the result as the enclosing class, so
+        // the wrapper it would emit cannot compile. Refused by name.
+        DeducedReturnType,
+        // Qt 6: a member declared only with an rvalue ref-qualifier
+        // ('QBitArray inverted_inplace() &&') needs an rvalue receiver. A
+        // generated wrapper holds a pointer, so the call it would emit does not
+        // compile, and no script can reach the member either way. It is refused
+        // by name so that the loss stays countable.
+        RequiresRvalue,
         NoReason
     };
 

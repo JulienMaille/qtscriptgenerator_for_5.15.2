@@ -1388,6 +1388,9 @@ bool Parser::parseDeclarator(DeclaratorAST *&node)
         token_stream.nextToken();  // skip ')'
 
         parseCvQualify(ast->fun_cv);
+        ast->fun_ref_qualifier = 0;
+        ast->fun_ref_is_rvalue = false;
+        parseRefQualifier(ast);
         ast->final_specifier = 0;
         parseExceptionSpecification(ast->exception_spec, &ast->final_specifier);
 
@@ -1508,6 +1511,9 @@ bool Parser::parseAbstractDeclarator(DeclaratorAST *&node)
         token_stream.nextToken();  // skip ')'
 
         parseCvQualify(ast->fun_cv);
+        ast->fun_ref_qualifier = 0;
+        ast->fun_ref_is_rvalue = false;
+        parseRefQualifier(ast);
         ast->final_specifier = 0;
         parseExceptionSpecification(ast->exception_spec, &ast->final_specifier);
       }
@@ -2370,6 +2376,31 @@ bool Parser::parseElaboratedTypeSpecifier(TypeSpecifierAST *&node)
 
   token_stream.rewind((int) start);
   return false;
+}
+
+// Qt 6: a member function declarator may end in a ref-qualifier:
+//     [[nodiscard]] QByteArray mid(qsizetype index, qsizetype len = -1) const &;
+//     [[nodiscard]] QByteArray mid(qsizetype index, qsizetype len = -1) &&;
+// The legacy parser stopped after the cv-qualifiers, so the '&' left behind made
+// the whole declaration fail: the error recovery dropped the member and nothing
+// but reportDroppedDeclaration() said it had existed. The lexer reports '&' as
+// '&' and '&&' as Token_and (see Lexer::scanKeyword3), so the two forms are told
+// apart here and recorded on the declarator. Which one it is matters
+// downstream: a generated wrapper holds an lvalue, so a member declared only
+// '&&' cannot be called from the generated code at all and is refused by
+// AbstractMetaBuilder::traverseFunction() rather than bound.
+bool Parser::parseRefQualifier(DeclaratorAST *node)
+{
+  int tk = token_stream.lookAhead();
+
+  if (tk != '&' && tk != Token_and)
+    return false;
+
+  node->fun_ref_qualifier = token_stream.cursor();
+  node->fun_ref_is_rvalue = (tk == Token_and);
+  token_stream.nextToken();
+
+  return true;
 }
 
 bool Parser::parseExceptionSpecification(ExceptionSpecificationAST *&node,

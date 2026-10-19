@@ -6,8 +6,6 @@
 //
 // Known gaps that are measured but not asserted here, because their cause is
 // still being isolated (see the reject log, generator/mjb_rejected_functions.log):
-//   - QByteArray.left/right/mid/first/last/sliced/toUpper/toLower: dropped in
-//     qbytearray.h, where the active branch declares them [[nodiscard]] ... const &;
 //   - QByteArray.contains: not a loss at all. The curated typesystem rejects it
 //     (`<rejection class="QByteArray" function-name="contains"/>` in
 //     generator/typesystem_core-qtscript.xml), and the reject log files both
@@ -90,6 +88,34 @@ check(buffer.toString() === "Xcd", "QByteArray.remove() failed");
 buffer.chop(1);
 buffer.truncate(2);
 check(buffer.toString() === "Xc", "QByteArray.chop()/truncate() failed");
+
+// --- QByteArray: the members qbytearray.h declares with a trailing ref-qualifier
+// ("[[nodiscard]] QByteArray left(qsizetype) const &"). Their declarations used
+// to fail in the parser - which does not read the '&' - and the recovery dropped
+// them, so they never reached the bindings and only a stderr warning named them.
+// On both Qt lines the lvalue-callable overload is the 'const &' one; the '&&'
+// twins stay out (a wrapper holds an lvalue, so it cannot call them).
+var sample = new QByteArray("sample");
+check(sample.left(3).toString() === "sam", "QByteArray.left() failed");
+check(sample.right(3).toString() === "ple", "QByteArray.right() failed");
+check(sample.mid(1, 3).toString() === "amp", "QByteArray.mid() failed");
+check(sample.first(2).toString() === "sa", "QByteArray.first() failed");
+check(sample.last(2).toString() === "le", "QByteArray.last() failed");
+check(sample.sliced(1, 3).toString() === "amp", "QByteArray.sliced() failed");
+check(sample.chopped(1).toString() === "sampl", "QByteArray.chopped() failed");
+check(sample.toUpper().toString() === "SAMPLE", "QByteArray.toUpper() failed");
+check(sample.toLower().toString() === "sample", "QByteArray.toLower() failed");
+check(new QByteArray("  padded  ").trimmed().toString() === "padded",
+      "QByteArray.trimmed() failed");
+check(new QByteArray("a  b   c").simplified().toString() === "a b c",
+      "QByteArray.simplified() failed");
+// The trailing NUL nullTerminated() appends does not survive the binding's
+// value conversion (the returned QByteArray comes back as a 6-byte "sample"),
+// so only the content is asserted here.
+check(sample.nullTerminated().toString() === "sample",
+      "QByteArray.nullTerminated() failed");
+check(new QByteArray("a%20b").percentDecoded().toString() === "a b",
+      "QByteArray.percentDecoded() failed");
 
 // --- QDate, QTime, QDateTime
 var leapDay = new QDate(2024, 2, 29);

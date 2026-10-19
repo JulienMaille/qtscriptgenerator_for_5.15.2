@@ -68,6 +68,24 @@ static bool hasFinalSpecifier(DeclaratorAST *declarator)
   return false;
 }
 
+// Qt 6: a trailing ref-qualifier ('QByteArray mid(qsizetype, qsizetype) const &',
+// recorded by the parser) makes the member callable on an lvalue only when it is
+// the '&' form. A member declared '&&' needs an rvalue receiver: the generated
+// wrapper holds a pointer, so the call it would emit does not compile, and no
+// script can reach such a member anyway. Walk the declarator chain like
+// hasFinalSpecifier, because the qualifier sits on the declarator that carries
+// the parameter list.
+static bool isRvalueRefQualified(DeclaratorAST *declarator)
+{
+  while (declarator)
+    {
+      if (declarator->fun_ref_is_rvalue)
+        return true;
+      declarator = declarator->sub_declarator;
+    }
+  return false;
+}
+
 // Qt 6: a function taking an rvalue reference ("T&&") cannot be called from a
 // generated binding: the binding only ever holds an lvalue, so the call is
 // ambiguous with the by-value / const& overload (C2668) or resolves to the
@@ -346,6 +364,7 @@ void Binder::declare_symbol(SimpleDeclarationAST *node, InitDeclaratorAST *init_
       fun->setConstant(declarator->fun_cv != 0);
       fun->setException(exceptionSpecToString(declarator->exception_spec));
       fun->setFinal(hasFinalSpecifier(init_declarator->declarator));
+      fun->setRvalueRefQualified(isRvalueRefQualified(init_declarator->declarator));
 
       fun->setTemplateParameters(_M_current_template_parameters);
       applyStorageSpecifiers(node->storage_specifiers, model_static_cast<MemberModelItem>(fun));
@@ -466,6 +485,7 @@ void Binder::visitFunctionDefinition(FunctionDefinitionAST *node)
   _M_current_function->setTemplateParameters(_M_current_template_parameters);
   _M_current_function->setException(exceptionSpecToString(declarator->exception_spec));
   _M_current_function->setFinal(hasFinalSpecifier(init_declarator->declarator));
+  _M_current_function->setRvalueRefQualified(isRvalueRefQualified(init_declarator->declarator));
 
   applyStorageSpecifiers(node->storage_specifiers,
                           model_static_cast<MemberModelItem>(_M_current_function));

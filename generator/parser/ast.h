@@ -381,6 +381,12 @@ struct DeclaratorAST: public AST
   ParameterDeclarationClauseAST *parameter_declaration_clause;
   const ListNode<std::size_t> *fun_cv;
   ExceptionSpecificationAST *exception_spec;
+  // Qt 6: token index of a trailing ref-qualifier ('QByteArray mid(...) const &'),
+  // 0 when the declaration carries none, and which of the two forms it is. The
+  // lexer reports '&' as '&' and '&&' as Token_and, so the kind cannot be read
+  // back from the index alone; see Parser::parseRefQualifier().
+  std::size_t fun_ref_qualifier;
+  bool fun_ref_is_rvalue;
   // Qt 6: token index of a trailing 'final' virt-specifier ("void f() final"),
   // 0 when the declaration carries none. A function that is final in C++
   // cannot be overridden by the generated QtScriptShell_* subclass.

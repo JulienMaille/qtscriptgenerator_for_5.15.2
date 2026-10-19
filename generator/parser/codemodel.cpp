@@ -623,6 +623,14 @@ bool _FunctionModelItem::isSimilar(FunctionModelItem other) const
   if (isVariadics() != other->isVariadics())
     return false;
 
+  // Qt 6: two functions differing only by a ref-qualifier are distinct C++
+  // overloads ('QByteArray mid(...) const &' and 'QByteArray mid(...) &&' are
+  // declared side by side in qbytearray.h). Without this they would collapse
+  // into one code-model entry, and the '&&' one - which the meta builder has to
+  // refuse by name - could take the place of the '&' one that is emitted.
+  if (isRvalueRefQualified() != other->isRvalueRefQualified())
+    return false;
+
   if (arguments().count() != other->arguments().count())
     return false;
 
@@ -745,6 +753,17 @@ bool _FunctionModelItem::isFinal() const
 void _FunctionModelItem::setFinal(bool isFinal)
 {
     _M_isFinal = isFinal;
+}
+
+// Qt 6: '&&' ref-qualifier
+bool _FunctionModelItem::isRvalueRefQualified() const
+{
+    return _M_isRvalueRefQualified;
+}
+
+void _FunctionModelItem::setRvalueRefQualified(bool rvalueRefQualified)
+{
+    _M_isRvalueRefQualified = rvalueRefQualified;
 }
 
 // ---------------------------------------------------------------------------

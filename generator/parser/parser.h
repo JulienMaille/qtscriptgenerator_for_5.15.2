@@ -152,6 +152,7 @@ public:
   bool parsePrimaryExpression(ExpressionAST *&node);
   bool parsePtrOperator(PtrOperatorAST *&node);
   bool parsePtrToMember(PtrToMemberAST *&node);
+  bool parseRefQualifier(DeclaratorAST *node);
   bool parseRelationalExpression(ExpressionAST *&node,
 				 bool templArgs = false);
   bool parseShiftExpression(ExpressionAST *&node);
