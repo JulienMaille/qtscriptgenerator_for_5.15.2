@@ -1177,6 +1177,67 @@ AbstractMetaClass *AbstractMetaBuilder::traverseTypeAlias(TypeAliasModelItem typ
     return meta_class;
 }
 
+// Qt 6 (audit, P-D): qlist.h declares its two element-typed aliases against the
+// private representation of the container, and spells them out only for QDoc:
+//
+//     #ifndef Q_QDOC
+//     using parameter_type = typename DataPointer::parameter_type;
+//     using rvalue_ref = typename std::conditional<DataPointer::pass_parameter_by_value,
+//                                                  DisableRValueRefs, T &&>::type;
+//     #else  // simplified aliases for QDoc
+//     using parameter_type = const T &;
+//     using rvalue_ref = T &&;
+//     #endif
+//
+// The Q_QDOC branch is the only spelling that names the element type, hence the
+// only one the generator can translate: DataPointer is private and its members
+// depend on the instantiation, so every member spelled with either alias was
+// dropped as an unmatched type - QList's own prepend, push_back, push_front,
+// fill, insert, replace, resize, value, startsWith, endsWith and assign, and the
+// same members on every class that flattens a QList instantiation.
+//
+// Record the QDoc spelling of parameter_type. It names the element type with the
+// class's own template parameter, so inheritTemplate() substitutes it for
+// QPolygon, QPolygonF, QItemSelection and QXmlStreamAttributes like any other
+// 'const T &'. Those are the four classes in the nine modules that flatten a
+// QList instantiation, and with an element type that is neither arithmetic, a
+// pointer nor an enum, QArrayDataPointer::pass_parameter_by_value is false and
+// 'const T &' is exactly what parameter_type names (qarraydatapointer.h). For a
+// future flattened list of a trivial element Qt would pass by value instead; the
+// generated call would still compile (a 'const T &' binds a 'T' parameter), but
+// the alias would then have to be read against the instantiation rather than
+// assumed - the reason this substitution is bound to the DataPointer spelling
+// and not to the alias name alone.
+//
+// rvalue_ref is deliberately NOT recorded: 'T &&' is an rvalue-only parameter,
+// and the binder drops such a function from the declarator, where the parameter
+// is still spelled rvalue_ref - unreachable for a check that looks at the
+// resolved type. A wrapper would therefore pass an lvalue to the rvalue overload
+// and fail to compile. isRvalueOnlyAlias() gives those refusals their name.
+static TypeInfo elementDependentAlias(const ClassModelItem &class_item,
+                                      const QString &alias_name,
+                                      const TypeInfo &target)
+{
+    if (alias_name != QLatin1String("parameter_type"))
+        return TypeInfo();
+
+    if (!target.qualifiedName().join(QLatin1String("::"))
+             .endsWith(QLatin1String("DataPointer::parameter_type")))
+        return TypeInfo();
+
+    const TemplateParameterList parameters = class_item->templateParameters();
+    if (parameters.isEmpty())
+        return TypeInfo();
+
+    TypeInfo element;
+    QStringList name;
+    name << parameters.first()->name();
+    element.setQualifiedName(name);
+    element.setConstant(true);
+    element.setReference(true);
+    return element;
+}
+
 AbstractMetaClass *AbstractMetaBuilder::traverseClass(ClassModelItem class_item)
 {
     QString class_name = strip_template_args(class_item->name());
@@ -1308,9 +1369,11 @@ AbstractMetaClass *AbstractMetaBuilder::traverseClass(ClassModelItem class_item)
     // too late for the class that declares them: a signature spelled with one of
     // them would translate to nothing. See translateType(), step 5d.
     foreach (TypeAliasModelItem classAlias, class_item->typeAliases()) {
+        const TypeInfo declared = classAlias->type();
+        const TypeInfo element = elementDependentAlias(class_item, classAlias->name(), declared);
         m_scoped_type_aliases.insert(type->qualifiedCppName()
                                      + QLatin1String("::") + classAlias->name(),
-                                     classAlias->type());
+                                     element.qualifiedName().isEmpty() ? declared : element);
     }
 
     traverseFunctions(model_dynamic_cast<ScopeModelItem>(class_item), meta_class);
@@ -2103,16 +2166,22 @@ AbstractMetaFunction *AbstractMetaBuilder::traverseFunction(FunctionModelItem fu
         }
         AbstractMetaType *meta_type = translateType(argType, &ok);
         if (!meta_type || !ok) {
+            // Qt 6 (audit, P-D): an argument spelled with an rvalue-only alias
+            // (rvalue_ref) is not an unmatched type - the member exists, it just
+            // cannot be called with the lvalue a wrapper holds.
+            const bool rvalueOnly = isRvalueOnlyAlias(arg->type().toString());
             ReportHandler::warning(QString("skipping function '%1::%2', "
-                                           "unmatched parameter type '%3'")
+                                           "%3 parameter type '%4'")
                                    .arg(class_name)
                                    .arg(function_item->name())
+                                   .arg(rvalueOnly ? QString("rvalue-only")
+                                                   : QString("unmatched"))
                                    .arg(arg->type().toString()));
             // Audit: as above, record the argument type that could not be
             // translated, not just the fact that the function was dropped.
             m_rejected_functions[class_name + "::" + rejectedFunctionSignature(function_item)
                                  + QString("  [argument %1 type '%2']").arg(i).arg(arg->type().toString())] =
-                UnmatchedArgumentType;
+                rvalueOnly ? RequiresRvalue : UnmatchedArgumentType;
             meta_function->setInvalid(true);
             return meta_function;
         }
@@ -2905,6 +2974,24 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
     }
 
     AbstractMetaFunctionList funcs = subclass->functions();
+
+    // Qt 6 (audit, P-D): a member of a container template can spell its return
+    // type or an argument with the injected class name (`QList &assign(...)`,
+    // `QList &operator+=(...)`). C++ reads that as the template class itself, but
+    // the model keeps a container type with no instantiation, and the emitter
+    // then writes `QList`/`QList &`, which does not compile. Fill in the single
+    // instantiation of the template, as the argument path below has always done
+    // for `QList<T> &` in QList::swap.
+    auto fillContainerInstantiation = [&](AbstractMetaType *type) {
+        if (type && type->typeEntry()->isContainer()
+            && type->instantiations().isEmpty()
+            && template_types.size() == 1) {
+            QList<AbstractMetaType *> instantiations;
+            instantiations << template_types.at(0)->copy();
+            type->setInstantiations(instantiations);
+        }
+    };
+
     foreach (const AbstractMetaFunction *function, template_class->functions()) {
 
         if (function->isModifiedRemoved(TypeSystem::All)) {
@@ -2936,6 +3023,7 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
             delete f;
             continue;
         }
+        fillContainerInstantiation(f->type());
 
         foreach (AbstractMetaArgument *argument, function->arguments()) {
             AbstractMetaType *atype = argument->type();
@@ -2956,13 +3044,7 @@ bool AbstractMetaBuilder::inheritTemplate(AbstractMetaClass *subclass,
             // without its instantiation. That leaves the generated argument
             // conversion uninstantiated and uncompilable, so fill it in from
             // the single instantiation of the template.
-            if (inherited && inherited->typeEntry()->isContainer()
-                && inherited->instantiations().isEmpty()
-                && template_types.size() == 1) {
-                QList<AbstractMetaType *> instantiations;
-                instantiations << template_types.at(0)->copy();
-                inherited->setInstantiations(instantiations);
-            }
+            fillContainerInstantiation(inherited);
             arg->setType(inherited);
             f->addArgument(arg);
         }
@@ -3316,7 +3398,7 @@ static void write_reject_log_file(const QString &name,
             break;
 
         case AbstractMetaBuilder::RequiresRvalue:
-            s << "Only callable on an rvalue (ref-qualified '&&')";
+            s << "Only callable with an rvalue (rvalue reference parameter, or '&&' ref-qualifier)";
             break;
 
         default:
@@ -3395,6 +3477,22 @@ TypeInfo AbstractMetaBuilder::scopedTypeAlias(const QString &qualified_name) con
     }
 
     return TypeInfo();
+}
+
+// Qt 6 (audit, P-D): the argument is spelled with a class-scoped alias whose
+// target is an rvalue reference (qlist.h's rvalue_ref, spelled
+// std::conditional<DataPointer::pass_parameter_by_value, ..., T &&>::type).
+// Such a member is callable only with an rvalue, so the wrapper cannot call it;
+// the binder's rvalue-reference filter cannot see it either, because that filter
+// runs on the declarator, where the alias is still spelled by name. Report the
+// refusal as RequiresRvalue instead of "unmatched argument type", so the loss
+// names its cause rather than reading as a generator gap.
+bool AbstractMetaBuilder::isRvalueOnlyAlias(const QString &spelling) const
+{
+    const QString target = scopedTypeAlias(spelling).qualifiedName()
+                               .join(QLatin1String("::"));
+    return target.contains(QLatin1String("DataPointer::"))
+           && target.contains(QLatin1String("std::conditional"));
 }
 
 void AbstractMetaBuilder::traceFunctions(const AbstractMetaClass *cls)

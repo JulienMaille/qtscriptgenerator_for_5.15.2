@@ -65,10 +65,12 @@ public:
         // the wrapper it would emit cannot compile. Refused by name.
         DeducedReturnType,
         // Qt 6: a member declared only with an rvalue ref-qualifier
-        // ('QBitArray inverted_inplace() &&') needs an rvalue receiver. A
-        // generated wrapper holds a pointer, so the call it would emit does not
-        // compile, and no script can reach the member either way. It is refused
-        // by name so that the loss stays countable.
+        // ('QBitArray inverted_inplace() &&') needs an rvalue receiver, and a
+        // member whose parameter is an rvalue reference (QList<T>::rvalue_ref)
+        // needs an rvalue argument. A generated wrapper holds a pointer and
+        // passes an lvalue, so the call it would emit does not compile, and no
+        // script can reach the member either way. Both are refused by name so
+        // that the loss stays countable and does not read as a generator gap.
         RequiresRvalue,
         NoReason
     };
@@ -159,6 +161,7 @@ protected:
 private:
     void traceFunctions(const AbstractMetaClass *cls);
     TypeInfo scopedTypeAlias(const QString &qualified_name) const;
+    bool isRvalueOnlyAlias(const QString &spelling) const;
 
     void sortLists();
 
