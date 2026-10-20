@@ -569,7 +569,10 @@ vérification de la paire CI 6.8.3 + 6.12 (les artefacts CI 6.8/6.12 servent de 
   (mécanisme A : `tools/surface-scan.ps1` + `tools/surface-contract.ps1` + contrat `457/8 861/9`
   branché après la génération dans les deux workflows), `ed08c44` (la ligne 6.8.3 a son contrat :
   `generator/surface-contract-qt683.json`, 456/8 790, semé depuis l'artefact du run vert
-  `39475844690`).
+  `39475844690`), `b2ac740` (C4715 : les wrappers de virtuelles pures sont émis avec
+  `Q_UNREACHABLE_RETURN(<défaut>)` après le `qFatal` — Qt ne marque `qFatal` noreturn que hors MSVC
+  (`qlogging.h` L67-70), les 85 avertissements de build disparaissent sans toucher au code curé ;
+  surface inchangée, 25 suites vertes).
   Seuls `.cmake/` et `.cmake612-rwdi/` restent non suivis (préexistants).
 * Les runs de sonde et de génération ont réécrit `generator/.preprocessed.tmp`, `generator/mjb_*.log`
   et `generated_cpp/` (tous **ignorés** par git).
