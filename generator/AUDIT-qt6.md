@@ -37,9 +37,11 @@ bindings n'a reçu aucune modification. Paire CI verte sur `ca0ec36` (6.12 `3941
    un log de rejets vert ne prouvent rien. F7 le confirme autrement : deux regens identiques pouvaient
    produire des arbres **différents**, dont l'un avec des **valeurs d'enum fausses**, sans qu'aucun
    journal ni aucun test ne bronche. F1/F2/F7/F8 sont maintenant instrumentés ; le budget de rejets **par
-   module** (mécanisme B) est livré (`a23b479`) — journaux par module dans `regen-all.ps1`,
-   `tools/reject-budget.ps1`, `generator/reject-budget.json` amorcé sur 6.12 — et reste à semer sur 6.8.3
-   puis à brancher dans les deux workflows.
+   module** (mécanisme B) est livré (`a23b479`) et la gate est **branchée dans les deux workflows**
+   (les effectifs 6.8.3 de l'artefact du run vert `39415102876` sont tous inférieurs à ceux semés sur
+   6.12 : un fichier couvre les deux lignes). Le **contrat de surface versionné** (mécanisme A) est
+   livré et branché lui aussi : `tools/surface-contract.ps1` + `generator/surface-contract.json`
+   (457 classes, 8 861 membres, 9 modules), check après la génération — voir §5.A.
 
 ---
 
@@ -498,6 +500,15 @@ Conséquences sur le plan :
 * **A — contrat de surface** : la référence est la surface **6.12** (et l'artefact **6.8** comme second
   point de mesure), **pas le port**. Passez à un diff **par signature** (l'instrument actuel écrase les
   surcharges). La paire 6.8/6.12 est stable (14 retraits / 103 ajouts) : tout écart inattendu saute aux yeux.
+  **Livre le 20/10/2026** : `tools/surface-scan.ps1` (lire, dans chaque wrapper, la table des noms qu'il
+  émet), `tools/surface-contract.ps1` et le contrat `generator/surface-contract.json` (457 classes,
+  8 861 membres, 9 modules). Check dans les deux workflows **après la génération, avant la gate
+  budget** : un nom du contrat absent de l'arbre régénéré échoue, **nommé** (`gui : QPolygon.fill`,
+  classe entière: `QLocalSocket (whole class)`), en 30 s au lieu d'attendre la compilation. Les
+  ajouts sont annoncés sans bloquer et entrent dans le contrat via `-Update` (diff git relu) ; une
+  perte n'est réécrite qu'avec `-Update -Force`. Complément exact du budget : le budget ne voit
+  que ce que le générateur journalise, le contrat voit ce qu'il **émet** — c'est lui qui ferme la
+  classe de panes silencieuses (F1–F5, F7, F8).
 * **B — gate des rejets par module** : le journal est réécrit par chaque module, donc seul le dernier
   survivait — la gate n'avait pas d'entrée fiable. **Livré (en cours de validation CI)** :
   `regen-all.ps1` déplace les six journaux dans `<output>\logs\<module>\` après chaque module (et les
@@ -549,7 +560,9 @@ vérification de la paire CI 6.8.3 + 6.12 (les artefacts CI 6.8/6.12 servent de 
   friends*), `c1982e5` (deux enums morts de `QPinchGesture`), `6bc3c1a` (P-G : ordre de déclaration des
   enums), `a23b479` (mécanisme B : un journal de rejets par module + budget), `b5c9dee` (P-F : F5.1),
   `ca0ec36` (ce rapport), `423dfac` (F8 : valeurs d'enum inter-classes, résolution à la demande +
-  `classes()` en ordre de déclaration).
+  `classes()` en ordre de déclaration), `70a1fd5` (gate budget dans les deux workflows), `002cfad`
+  (mécanisme A : `tools/surface-scan.ps1` + `tools/surface-contract.ps1` + contrat `457/8 861/9`
+  branché après la génération dans les deux workflows).
   Seuls `.cmake/` et `.cmake612-rwdi/` restent non suivis (préexistants).
 * Les runs de sonde et de génération ont réécrit `generator/.preprocessed.tmp`, `generator/mjb_*.log`
   et `generated_cpp/` (tous **ignorés** par git).
