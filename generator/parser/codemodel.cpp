@@ -407,7 +407,7 @@ FunctionModelItem _ScopeModelItem::declaredFunction(FunctionModelItem item)
 
 ClassList _ScopeModelItem::classes() const
 {
-  return _M_classes.values();
+  return _M_classOrder;
 }
 
 TypeAliasList _ScopeModelItem::typeAliases() const
@@ -447,6 +447,16 @@ void _ScopeModelItem::addClass(ClassModelItem item)
  if (idx > 0)
      _M_classes.insert(name.left(idx), item);
   _M_classes.insert(name, item);
+
+  // Keep declaration order for classes(), in step with the name -> item map.
+  // A name added twice replaces its entry in place, like addEnum() above.
+  for (int i = 0; i < _M_classOrder.size(); ++i) {
+    if (_M_classOrder.at(i)->name() == name) {
+      _M_classOrder[i] = item;
+      return;
+    }
+  }
+  _M_classOrder.append(item);
 }
 
 void _ScopeModelItem::addFunction(FunctionModelItem item)
@@ -491,6 +501,13 @@ void _ScopeModelItem::removeClass(ClassModelItem item)
 
   if (it != _M_classes.end() && it.value() == item)
     _M_classes.erase(it);
+
+  for (int i = 0; i < _M_classOrder.size(); ++i) {
+    if (_M_classOrder.at(i) == item) {
+      _M_classOrder.removeAt(i);
+      break;
+    }
+  }
 }
 
 void _ScopeModelItem::removeFunction(FunctionModelItem item)

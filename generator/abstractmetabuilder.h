@@ -96,7 +96,7 @@ public:
 
     bool build();
 
-    void figureOutEnumValuesForClass(AbstractMetaClass *meta_class, QSet<AbstractMetaClass *> *classes);
+    bool resolveEnumValuesForClass(AbstractMetaClass *meta_class);
     int figureOutEnumValue(const QString &name, int value, AbstractMetaEnum *meta_enum, AbstractMetaFunction *meta_function = 0);
     void figureOutEnumValues();
     void figureOutDefaultEnumArguments();
@@ -213,6 +213,14 @@ private:
     QList<QPair<AbstractMetaArgument *, AbstractMetaFunction *> > m_enum_default_arguments;
 
     QHash<QString, AbstractMetaEnumValue *> m_enum_values;
+
+    // Qt 6 (audit, F8): a class whose enums are being resolved, and the ones
+    // already done. figureOutEnumValues() walks the classes in traversal order,
+    // but an enumerator can name a constant of a class reached later; the two
+    // sets let figureOutEnumValue() resolve that class on demand, and stop a
+    // class from resolving itself through a reference cycle.
+    QSet<AbstractMetaClass *> m_enum_values_resolved;
+    QSet<AbstractMetaClass *> m_enum_values_resolving;
 
     AbstractMetaClass *m_current_class;
     QList<ScopeModelItem> m_scopes;

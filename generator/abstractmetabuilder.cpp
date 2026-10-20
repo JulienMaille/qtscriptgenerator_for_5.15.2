@@ -793,7 +793,25 @@ int AbstractMetaBuilder::figureOutEnumValue(const QString &stringValue,
             matched = true;
 
         } else if (m_enum_values.contains(s)) {
-            v = m_enum_values[s]->value();
+            AbstractMetaEnumValue *registered = m_enum_values[s];
+
+            // Qt 6 (audit, F8): the referenced constant may belong to a class
+            // the traversal has not reached yet, in which case its value is
+            // still the default 0 and every enumerator of the current enum
+            // would alias it. Resolve that class first. Skip a class that is
+            // being resolved right now: it is this very enum in the normal
+            // case (an enumerator may only use constants already declared).
+            AbstractMetaEnum *owner = registered->enclosingEnum();
+            AbstractMetaClass *ownerClass = owner ? owner->enclosingClass() : 0;
+            if (!registered->isValueSet() && ownerClass
+                && !m_enum_values_resolving.contains(ownerClass)) {
+                if (!resolveEnumValuesForClass(ownerClass) || !registered->isValueSet()) {
+                    ReportHandler::warning(QString("unresolved enum value '%1' referenced by '%2'")
+                                           .arg(s, meta_enum ? meta_enum->fullName() : QString()));
+                }
+            }
+
+            v = registered->value();
             matched = true;
 
         } else {
@@ -837,16 +855,24 @@ int AbstractMetaBuilder::figureOutEnumValue(const QString &stringValue,
     return returnValue;
 }
 
-void AbstractMetaBuilder::figureOutEnumValuesForClass(AbstractMetaClass *meta_class,
-                                                  QSet<AbstractMetaClass *> *classes)
+bool AbstractMetaBuilder::resolveEnumValuesForClass(AbstractMetaClass *meta_class)
 {
+    if (m_enum_values_resolved.contains(meta_class))
+        return true;
+
+    // A reference cycle cannot be expressed in C++ (an enumerator may only use
+    // constants that are already complete), but a malformed tree must not
+    // recurse forever: leave the class to its own pass and report it.
+    if (m_enum_values_resolving.contains(meta_class)) {
+        ReportHandler::warning(QString("enum value cycle through '%1'").arg(meta_class->name()));
+        return false;
+    }
+    m_enum_values_resolving.insert(meta_class);
+
     AbstractMetaClass *base = meta_class->baseClass();
 
-    if (base != 0 && !classes->contains(base))
-        figureOutEnumValuesForClass(base, classes);
-
-    if (classes->contains(meta_class))
-        return;
+    if (base != 0 && !m_enum_values_resolved.contains(base))
+        resolveEnumValuesForClass(base);
 
     AbstractMetaEnumList enums = meta_class->enums();
     foreach (AbstractMetaEnum *e, enums) {
@@ -912,17 +938,21 @@ void AbstractMetaBuilder::figureOutEnumValuesForClass(AbstractMetaClass *meta_cl
 
 
 
-    *classes += meta_class;
+    m_enum_values_resolving.remove(meta_class);
+    m_enum_values_resolved.insert(meta_class);
+    return true;
 }
 
 
 void AbstractMetaBuilder::figureOutEnumValues()
 {
-    // Keep a set of classes that we already traversed. We use this to
-    // enforce that we traverse base classes prior to subclasses.
-    QSet<AbstractMetaClass *> classes;
+    // Classes are marked when their enums are done, so that a reference from
+    // one class to an enum of another can resolve the target on demand, and a
+    // base class is always resolved before its subclass.
+    m_enum_values_resolved.clear();
+    m_enum_values_resolving.clear();
     foreach (AbstractMetaClass *c, m_meta_classes) {
-        figureOutEnumValuesForClass(c, &classes);
+        resolveEnumValuesForClass(c);
     }
 }
 
@@ -1110,6 +1140,7 @@ AbstractMetaEnum *AbstractMetaBuilder::traverseEnum(EnumModelItem enum_item, Abs
         // Deciding the enum value...
 
         meta_enum_value->setStringValue(value->value());
+        meta_enum_value->setEnclosingEnum(meta_enum);
         meta_enum->addEnumValue(meta_enum_value);
 
         ReportHandler::debugFull("   - " + meta_enum_value->name() + " = "

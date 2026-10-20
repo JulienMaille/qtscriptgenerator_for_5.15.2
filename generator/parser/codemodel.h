@@ -325,6 +325,12 @@ protected:
 
 private:
   QHash<QString, ClassModelItem> _M_classes;
+  // Declaration order of the classes, kept next to the name -> item map: the
+  // map is a QHash and its values() order is seeded. The order drives the
+  // traversal in AbstractMetaBuilder, and cross-class enum values are resolved
+  // in that traversal, so a seeded order changed the numbers emitted for
+  // QLocalSocket::LocalSocketError (see figureOutEnumValues()).
+  ClassList _M_classOrder;
   QHash<QString, EnumModelItem> _M_enums;
   // Declaration order of the enums, kept next to the name -> item map: the
   // map is a QHash and its values() order is seeded, which made enum output

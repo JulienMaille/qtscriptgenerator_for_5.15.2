@@ -572,7 +572,7 @@ class AbstractMetaEnumValue
 {
 public:
     AbstractMetaEnumValue()
-        : m_value_set(false), m_value(0)
+        : m_enclosing_enum(0), m_value_set(false), m_value(0)
     {
     }
 
@@ -585,12 +585,21 @@ public:
     QString name() const { return m_name; }
     void setName(const QString &name) { m_name = name; }
 
+    // Qt 6 (audit, F8): an enumerator may name a constant of another class
+    // (`ConnectionRefusedError = QAbstractSocket::ConnectionRefusedError`). The
+    // value is resolved by looking it up in m_enum_values, so the owner has to
+    // be reachable to resolve that class on demand when the traversal has not
+    // reached it yet.
+    AbstractMetaEnum *enclosingEnum() const { return m_enclosing_enum; }
+    void setEnclosingEnum(AbstractMetaEnum *e) { m_enclosing_enum = e; }
+
     bool isValueSet() const { return m_value_set; }
 
 private:
     QString m_name;
     QString m_string_value;
 
+    AbstractMetaEnum *m_enclosing_enum;
     bool m_value_set;
     int m_value;
 };

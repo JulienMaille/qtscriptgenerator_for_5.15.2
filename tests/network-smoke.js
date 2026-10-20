@@ -65,3 +65,23 @@ check(peer.readAll().toString() === "ping", "local TCP payload was corrupted");
 peer.close();
 socket.close();
 server.close();
+
+// Qt 6 (audit, F8): every enumerator of LocalSocketError names a constant of
+// QAbstractSocket, and the traversal used to resolve some classes before
+// QAbstractSocket, reading the default 0. All the enumerators then aliased onto
+// ConnectionRefusedError, silently. The numbers below come from the Qt headers,
+// and the equality checks read the value through the source enumerator.
+check(Number(QLocalSocket.UnknownSocketError) === -1,
+      "QLocalSocket.UnknownSocketError must be -1");
+check(Number(QLocalSocket.ConnectionRefusedError) === 0,
+      "QLocalSocket.ConnectionRefusedError must be 0");
+check(Number(QLocalSocket.ServerNotFoundError) === 2,
+      "QLocalSocket.ServerNotFoundError must be 2");
+check(Number(QLocalSocket.OperationError) === 19,
+      "QLocalSocket.OperationError must be 19");
+check(Number(QLocalSocket.UnknownSocketError) === Number(QAbstractSocket.UnknownSocketError),
+      "QLocalSocket aliases must keep the value of the constant they name");
+check(Number(QLocalSocket.ServerNotFoundError) === Number(QAbstractSocket.HostNotFoundError),
+      "QLocalSocket.ServerNotFoundError must equal QAbstractSocket.HostNotFoundError");
+check(Number(QLocalSocket.OperationError) === Number(QAbstractSocket.OperationError),
+      "QLocalSocket.OperationError must equal QAbstractSocket.OperationError");
