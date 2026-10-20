@@ -90,6 +90,14 @@ jobs:
           -ApplyCurated
           -PublishRoot $env:GITHUB_WORKSPACE
 
+      - name: Check the surface contract
+        shell: pwsh
+        # The contract lists every class and member the bindings of the last
+        # review emitted. A name in the contract missing from the fresh tree
+        # fails here, before the build: the complement of the reject budget,
+        # which only sees what the generator logs.
+        run: .\tools\surface-contract.ps1 -GeneratedRoot .\generated_cpp
+
       - name: Check the reject budget
         shell: pwsh
         # The reject budget was seeded once and for all from Qt 6.12 and Qt
