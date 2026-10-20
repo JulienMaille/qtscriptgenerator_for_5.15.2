@@ -83,6 +83,28 @@ static bool outArgEngagesObjectPack(const QList<QPair<QString, AbstractMetaType 
     return !failureLiteral.isEmpty() && outArgs.size() > 0;
 }
 
+// Qt 6 (C4715): a pure virtual wrapper terminates through qFatal, but MSVC does
+// not see it as returning, so the branch needs an expression that ends the
+// function anyway. This is the default value of the declared return type:
+// nullptr for pointers, a value-constructed plain type otherwise
+// ("const QSize &" -> "QSize()"). The statement is behind qFatal and never
+// runs; it exists so every compiler sees all paths accounted for.
+static QString defaultReturnValueText(const AbstractMetaType *type)
+{
+    if (type->indirections() > 0)
+        return QLatin1String("nullptr");
+    QString plain = type->cppSignature();
+    if (plain.startsWith(QLatin1String("const ")))
+        plain.remove(0, 6);
+    while (plain.endsWith(QLatin1Char(' ')))
+        plain.chop(1);
+    if (plain.endsWith(QLatin1Char('&')))
+        plain.chop(1);
+    while (plain.endsWith(QLatin1Char(' ')))
+        plain.chop(1);
+    return plain + QLatin1String("()");
+}
+
 static void writeOutArgUnpack(QTextStream &s, const QString &argName, const AbstractMetaType *type)
 {
     const QString spelled = type->typeEntry()->qualifiedCppName();
@@ -256,6 +278,18 @@ void ShellImplGenerator::write(QTextStream &s, const AbstractMetaClass *meta_cla
         if (fun->isAbstract()) {
             s << "qFatal(\"" << meta_class->name() << "::" << fun->name()
               << "() is abstract!\");" << endl;
+            // Calling a pure virtual cannot work: the wired behavior is
+            // termination, which qFatal performs. Qt publishes
+            // QMessageLogger::fatal() as no-return on POSIX compilers only --
+            // qlogging.h keeps Q_NORETURN off under MSVC -- so without the
+            // statement below MSVC reports every pure virtual wrapper as a
+            // missing return path (C4715). Q_UNREACHABLE_RETURN is Qt's
+            // documented way to mark the program as terminated for every
+            // compiler: on MSVC it is the __assume(0) that ends the path,
+            // elsewhere an unreachable return of the declared type.
+            if (fun->type())
+                s << "        Q_UNREACHABLE_RETURN("
+                  << defaultReturnValueText(fun->type()) << ");" << endl;
         } else {
             // call the C++ implementation
             if (fun->type())
