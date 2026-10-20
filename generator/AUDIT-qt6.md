@@ -40,8 +40,9 @@ bindings n'a reçu aucune modification. Paire CI verte sur `ca0ec36` (6.12 `3941
    module** (mécanisme B) est livré (`a23b479`) et la gate est **branchée dans les deux workflows**
    (les effectifs 6.8.3 de l'artefact du run vert `39415102876` sont tous inférieurs à ceux semés sur
    6.12 : un fichier couvre les deux lignes). Le **contrat de surface versionné** (mécanisme A) est
-   livré et branché lui aussi : `tools/surface-contract.ps1` + `generator/surface-contract.json`
-   (457 classes, 8 861 membres, 9 modules), check après la génération — voir §5.A.
+   livré et branché lui aussi : `tools/surface-contract.ps1` + **un contrat par ligne Qt**
+   (`generator/surface-contract.json` 6.12 : 457 classes / 8 861 membres ;
+   `generator/surface-contract-qt683.json` 6.8.3 : 456 / 8 790), check après la génération — voir §5.A.
 
 ---
 
@@ -501,9 +502,13 @@ Conséquences sur le plan :
   point de mesure), **pas le port**. Passez à un diff **par signature** (l'instrument actuel écrase les
   surcharges). La paire 6.8/6.12 est stable (14 retraits / 103 ajouts) : tout écart inattendu saute aux yeux.
   **Livre le 20/10/2026** : `tools/surface-scan.ps1` (lire, dans chaque wrapper, la table des noms qu'il
-  émet), `tools/surface-contract.ps1` et le contrat `generator/surface-contract.json` (457 classes,
-  8 861 membres, 9 modules). Check dans les deux workflows **après la génération, avant la gate
-  budget** : un nom du contrat absent de l'arbre régénéré échoue, **nommé** (`gui : QPolygon.fill`,
+  émet), `tools/surface-contract.ps1` et **un contrat par ligne Qt** — les deux lignes émettent une
+  surface volontairement différente (ajouts/retraits côté Qt : `QBasicReadWriteLock` n'existe pas en
+  6.12, `QJsonValue::toStringView` n'existe pas en 6.8.3…), un seul fichier rejetterait à tort les 71
+  noms de la bonne ligne : `generator/surface-contract.json` **6.12** (457 classes, 8 861 membres) et
+  `generator/surface-contract-qt683.json` **6.8.3** (456 classes, 8 790 membres), semé depuis l'arbre
+  de l'artefact du run vert `39475844690`. Check dans les deux workflows **après la génération, avant
+  la gate budget** : un nom du contrat absent de l'arbre régénéré échoue, **nommé** (`gui : QPolygon.fill`,
   classe entière: `QLocalSocket (whole class)`), en 30 s au lieu d'attendre la compilation. Les
   ajouts sont annoncés sans bloquer et entrent dans le contrat via `-Update` (diff git relu) ; une
   perte n'est réécrite qu'avec `-Update -Force`. Complément exact du budget : le budget ne voit
@@ -562,7 +567,9 @@ vérification de la paire CI 6.8.3 + 6.12 (les artefacts CI 6.8/6.12 servent de 
   `ca0ec36` (ce rapport), `423dfac` (F8 : valeurs d'enum inter-classes, résolution à la demande +
   `classes()` en ordre de déclaration), `70a1fd5` (gate budget dans les deux workflows), `002cfad`
   (mécanisme A : `tools/surface-scan.ps1` + `tools/surface-contract.ps1` + contrat `457/8 861/9`
-  branché après la génération dans les deux workflows).
+  branché après la génération dans les deux workflows), `ed08c44` (la ligne 6.8.3 a son contrat :
+  `generator/surface-contract-qt683.json`, 456/8 790, semé depuis l'artefact du run vert
+  `39475844690`).
   Seuls `.cmake/` et `.cmake612-rwdi/` restent non suivis (préexistants).
 * Les runs de sonde et de génération ont réécrit `generator/.preprocessed.tmp`, `generator/mjb_*.log`
   et `generated_cpp/` (tous **ignorés** par git).
