@@ -3,8 +3,9 @@
 **Objet** — Finir l'audit du générateur Qt6 porté contre les projets bindings de référence : établir
 la liste *exacte* des pertes d'API, isoler la cause racine de chacune, proposer un correctif.
 **État** — Les correctifs F1 (`d0b1a62`), F5 option B (`84eb2d7`), P-D1 (`2019394`), F2 (`a54e49b`),
-F7 (`6bc3c1a`) et F5.1 (`b5c9dee`) sont appliqués dans le fork sur `qt6` ; le dépôt bindings n'a reçu
-aucune modification.
+F7 (`6bc3c1a`), F5.1 (`b5c9dee`) et F8 (`423dfac`) sont livrés dans le fork sur `qt6` ; le dépôt
+bindings n'a reçu aucune modification. Paire CI verte sur `ca0ec36` (6.12 `39415102699`,
+6.8 LTS `39415102876`).
 
 ---
 
@@ -20,13 +21,14 @@ aucune modification.
    port n'a pas encore élaguée. La référence valable est : **en-têtes Qt 6.12 + artefact 6.8 produit par
    la CI du fork lui-même**.
 3. Ce qui reste est **court** : **5 familles de pertes réelles** (F1–F5, chacune avec cause racine isolée
-   par reproduction minimale), **1 famille de rejets journalisés** (F6) à trier et **1 défaut de
-   reproductibilité** (F7) qui touchait les *valeurs d'enum*.
-   **État au 19/10/2026 :** F1 corrigé (`d0b1a62`), F2 **corrigé et mesuré** (surface 8 852 → 8 861),
-   F5 livré en option B (`84eb2d7`) puis P-D1 (`2019394`) puis F5.1 (`b5c9dee`), F7 **corrigé et mesuré**
-   (arbre reproductible au byte, `QSizePolicy` à ses 7 valeurs) ; le run CI 6.12 est **vert**, le run 6.8
-   LTS est **rouge** sur `QPolygon::fill`, dont la cause est isolée et corrigée en F5.1 (`b5c9dee`), en
-   attente du prochain run ; F3/F4 ouverts, F6 à trier.
+   par reproduction minimale), **1 famille de rejets journalisés** (F6) à trier et **2 défauts de
+   reproductibilité** (F7, F8) qui touchent les *valeurs d'enum*.
+   **État au 20/10/2026 :** F1 corrigé (`d0b1a62`), F2 corrigé (`a54e49b`, surface 8 852 → 8 861),
+   F5 livré en option B (`84eb2d7`) puis P-D1 (`2019394`) puis F5.1 (`b5c9dee`), F7 corrigé
+   (`6bc3c1a`, arbre reproductible, `QSizePolicy` à ses 7 valeurs), F8 corrigé (`423dfac`,
+   `QLocalSocket::LocalSocketError` à ses 11 valeurs sur 6 regens non seedés). Les runs CI 6.12
+   (`39415102699`) et 6.8 LTS (`39415102876`) sur `ca0ec36` sont **verts** tous les deux :
+   `QPolygon::fill` est joignable sur 6.8.3, comme prévu par F5.1. F3/F4 ouverts, F6 à trier.
 4. **4 faux positifs** sont retirés de la liste (dont `QDateTime::startOfDay`).
 5. Trois familles sont des **régressions du fork** par rapport à la base `689f13e` : la référence
    (`QByteArray::left/mid`, `QUuid::createUuid` statique, `QPolygon::at/indexOf`) les traitait
@@ -34,8 +36,8 @@ aucune modification.
 6. **Aucune de ces pertes n'apparaissait dans un journal de rejet** — c'était le vrai défaut. `exit=0` et
    un log de rejets vert ne prouvent rien. F7 le confirme autrement : deux regens identiques pouvaient
    produire des arbres **différents**, dont l'un avec des **valeurs d'enum fausses**, sans qu'aucun
-   journal ni aucun test ne bronche. F1/F2/F7 sont maintenant instrumentés ; le budget de rejets **par
-   module** (mécanisme B) est livré localement — journaux par module dans `regen-all.ps1`,
+   journal ni aucun test ne bronche. F1/F2/F7/F8 sont maintenant instrumentés ; le budget de rejets **par
+   module** (mécanisme B) est livré (`a23b479`) — journaux par module dans `regen-all.ps1`,
    `tools/reject-budget.ps1`, `generator/reject-budget.json` amorcé sur 6.12 — et reste à semer sur 6.8.3
    puis à brancher dans les deux workflows.
 
@@ -323,8 +325,22 @@ dont le `QList` déclarait `const T &at(int)`, `int indexOf(const T&, int)`…) 
 | `insert` (6 entrées) | rejet **curé** `<rejection class="QList" function-name="insert"/>` (`typesystem_core-qtscript.xml`) — décision, pas perte |
 | `QXmlStreamAttributes::push_back/push_front` | également curés : les déclarations de typesystem jusqu'ici **mortes** (le membre n'existait pas) sont devenues actives avec P-D1 |
 | `QXmlStreamAttributes::append(QXmlStreamAttribute)` | règle de *shadowing par nom* de l'aplatissement : la sous-classe déclare déjà `append`, le membre copié est ignoré (idem `QPolygon::swap`). Tracé dans `mjb_lost_template_functions.log`, antérieur à P-D1 |
-| `contains`, `indexOf`, `lastIndexOf` | **templates de fonction** : déclarés dans la base `QListSpecialMethodsBase<AT>` (`template <typename AT> qsizetype indexOf(const AT &t)`) et ramenés par `using`. Le générateur ne les voit qu'après instanciation du template **de fonction** au site d'appel : c'est P-D2, hors du périmètre de l'aplatissement. Perte définitive à documenter, sans contournement |
+| `contains`, `indexOf`, `lastIndexOf` | **templates de fonction** : déclarés dans la base `QListSpecialMethodsBase<AT>` (`template <typename AT> qsizetype indexOf(const AT &t)`) et ramenés par `using`. Le générateur ne les voit qu'après instanciation du template **de fonction** au site d'appel : c'est P-D2, hors du périmètre de l'aplatissement (perte définitive inscrite, voir la sous-section P-D2 ci-dessous) |
 | `QPolygon::mid()` | joignable, mais rend un `Array` JavaScript (retour `QList<T>` converti par `qScriptValueFromSequence`), pas un wrapper : `mid(1)[0]` fonctionne, les membres de `QList` n'existent pas sur le résultat |
+
+#### P-D2 — Templates de **fonction** membre : perte définitive (inscrite le 20/10/2026)
+
+`contains`, `indexOf`, `lastIndexOf` sont déclarés **une seule fois** dans la base
+`QListSpecialMethodsBase<AT>` sous la forme `template <typename AT> qsizetype indexOf(const AT &)`,
+ramenés dans chaque liste par `using`. Un template de *fonction* membre n'a de signature complète qu'au
+site d'appel : le générateur raisonne sur la **déclaration** parse, sans instanciation implicite, et le
+typesystem n'a pas d'ancrage où demander l'instanciation (`<rejection class="..." function-name="..."/>`
+ne voit pas de nom). Aucun contournement côté générateur : il faudrait un compilateur réel pour
+instancier au site. Perte d'**appelabilité**, pas de parité : les retours liste (`QPolygon::mid()`…)
+arrivent en `Array` JavaScript, où `Array.prototype.indexOf/includes` rendent le même service.
+
+Inscrite ici comme **définitive** pour qu'un audit ultérieur ne la re-découvre pas en « F » : à traiter
+comme `insert` (rejet curé : décision explicite, pas une panne).
 
 #### F5.1 — Surcharges **identiques** après aplatissement (révélé par P-D1 sur 6.8.3)
 
@@ -385,7 +401,8 @@ Ces pertes sont **visibles** (contrairement à F1–F5 et F7) : c'est la matièr
 
 ### F7 — Ordre des enums **non déterministe** : arbre non reproductible et valeurs fausses
 
-**État au 19/10/2026** : cause isolée, correctif appliqué localement (accord à donner pour le commit).
+**État au 19/10/2026** : cause isolée, corrigé et commité (`6bc3c1a`), validé par la paire CI verte sur
+`ca0ec36`.
 
 | | |
 | --- | --- |
@@ -400,13 +417,38 @@ Ce n'est pas une perte d'API, mais une **non-reproductibilité** de l'arbre gén
 dans un ordre sur deux, une **valeur d'enum fausse**. Les deux sont invisibles dans la mesure de surface
 (qui ne compte que les noms de membres) et dans les 22 suites actuelles.
 
-Reste ouvert : les autres `QHash::values()` du DOM (`classes()`, `functions()`, `typeAliases()`,
-`variables()`) peuvent encore changer l'**ordre** d'émission (pas les valeurs). `QT_HASH_SEED=0` dans les
-scripts et la CI rend les artefacts comparables en attendant un tri explicite.
+Reste ouvert : les autres `QHash::values()` du DOM (`functions()`, `typeAliases()`, `variables()`)
+peuvent encore changer l'**ordre** d'émission, et la résolution d'un alias `using` d'enum reste sensible
+à l'ordre d'inscription (voir F8) : l'orthographe `QIODeviceBase::OpenMode` vs
+`QAbstractSocket::QIODeviceBase::OpenMode` — deux orthographes valides C++ — varie d'un regen à l'autre
+pour l'orthographe seule, jamais pour les valeurs. `QT_HASH_SEED=0` dans les scripts et la CI rend les
+artefacts comparables en attendant un tri explicite.
 
 **Leçon de méthode** : la surface ne voit **pas les enums**. `QFileIconProvider::IconType`, que j'avais
 classé « mort » sur cette seule base, est en réalité émis (`QFileIconProvider.IconType` = 7 valeurs au
 runtime) ; c'est `QPinchGesture::WhatChange/ChangeFlag` qui ne produit rien (classe non liée).
+
+---
+
+### F8 — Valeurs d'enum **inter-classes** : dépendantes de l'ordre de traversal (`QLocalSocket`)
+
+**État au 20/10/2026** : cause isolée, corrigé et commité (`423dfac`), validé (6 regens non seedés +
+chaîne complète 22 suites + assertion dans `network-smoke.js`).
+
+| | |
+| --- | --- |
+| Symptôme | `QLocalSocket::LocalSocketError` sort parfois réduit à **1 valeur** (`ConnectionRefusedError`) + **10 alias « same numeric value »** : `QLocalSocket.ServerNotFoundError === 0` au lieu de 2. Sur 10 regens `network` non seedés : **2 arbres cassés**, sans une seule ligne « duplicate/unmatched » dans les 3,4 Mo de journaux |
+| Surface du problème | 38 blocs d'alias « same numeric value » dans l'arbre publié, dont beaucoup **légitimes** (défauts C++) ; les exposées sont les références inter-classes — `QLocalSocket::LocalSocketError/State` (11 + n énumérateurs vers `QAbstractSocket::*`) est la seule du catalogue à 6.12, déclarée dans `typesystem_network-common.xml` (L27-28) |
+| Preuve | sonde `f8.h` à graine 0 : `SRC::E{X = 5}` / `REF::F{Y = SRC::X, W = 5}` ⇒ Y = 5 (collision → 1 alias) ou Y = 0 selon l'ordre de traitement des classes ; avec les noms réels, 3 runs sur 6 tombaient à 0 |
+| Cause | chaîne : (1) `_ScopeModelItem::classes()` renvoyait `QHash::values()` ⇒ l'ordre de traversal est à graine (F7 l'a corrigé pour `enums()` seulement) ; (2) `figureOutEnumValuesForClass()` ne recurse que dans `baseClass()`, jamais dans la classe **cité par** `E = AutreClasse::X` ; (3) `m_enum_values` est rempli au fil du traversal, valeurs à 0 tant que leur classe n'est pas passée ⇒ une référence lue avant sa cible vaut **0**, tous les énumérateurs collident sur le premier |
+| Correctif | `423dfac` : (B) résolution **à la demande** — `AbstractMetaEnumValue` connaît désormais son enum (back-pointer) ; quand une référence vise une valeur pas encore calculée, `figureOutEnumValue()` résout la classe propriétaire avant de lire sa valeur, avec un jeu « classes en cours » qui interrompt un cycle d'alias impossible en C++ mais rapporté au lieu de récurser ; (C) comme F7, `classes()` renvoie l'**ordre de déclaration** (remplacement en place à la réinsertion, retrait dans `removeClass()`) |
+| Effet mesuré | 6 regens `network` non seedés ⇒ 62 fichiers, les 11 valeurs de `LocalSocketError` à chaque run, 0 alias ; sonde ⇒ Y = 5 dans 6 runs sur 6 ; chaîne complète 6.12 (9 modules, build, 22 suites) et surface **8 861** inchangée ; `network-smoke.js` cale désormais les valeurs (`UnknownSocketError = -1`, `ServerNotFoundError = 2`, `OperationError = 19`, égalité avec l'énumérateur source) |
+
+La valeur du correctif : une passe « chance » sur deux produits des **numéros faux** dans un binding
+compilé et voté — le genre de panne que ni la surface (noms seulement), ni les suites existantes
+(n'avaient pas ces constantes), ni les journaux (silencieux) ne voyaient. C'est aussi le premier correctif
+de l'audit à jouer la partie **runtime** : l'assertion nouvelle échoue sur un arbre cassé par
+construction (une seule valeur), donc elle verrouille la ligne.
 
 ---
 
@@ -442,7 +484,10 @@ Les familles F1–F5 (et F7) n'apparaissaient dans **aucun** journal :
 * F4 : déclaration de typesystem **sans correspondance** dans le DOM → ignorée en silence ;
 * F5 : signature d'aplatissement non résolue → écartée en silence ;
 * F7 : ordre des enums tiré d'un `QHash` → ni journal, ni test, ni mesure de surface ne pouvaient le
-  voir ; **corrigé** (l'ordre de déclaration est conservé).
+  voir ; **corrigé** (l'ordre de déclaration est conservé) ;
+* F8 : référence d'enum inter-classes lue à 0 tant que sa classe cible n'est pas venue dans un ordre de
+  traversal à graine → **numéros faux** dans l'arbre compilé, sans journal ni test ; **corrigé**
+  (résolution à la demande), et verrouillé au runtime dans `network-smoke.js`.
 
 C'est exactement le mécanisme déjà documenté dans `regen-all.ps1:71-78` (`INCLUDE` non vide ⇒ 4 classes
 QtCore — dont `QByteArray` — perdues sans un mot dans le log, 80 classes au lieu de 84). **`exit=0`,
@@ -473,21 +518,23 @@ Conséquences sur le plan :
 
 ---
 
-## 6. Propositions (ordre conseillé, état au 19/10/2026)
+## 6. Propositions (ordre conseillé, état au 20/10/2026)
 
 | # | Correctif | Fichier(s) | Portée | Risque | Preuve attendue |
 | --- | --- | --- | --- | --- | --- |
 | **P-E** | Instrumentation : journaliser les 5 pertes silencieuses (`qWarning`/log + compteurs) ; ajouter le drapeau `static` au dump `--ast-to-xml` | `abstractmetabuilder.cpp`, `parser/binder.cpp`, `asttoxml.cpp` | diagnostic seul | nul (aucun effet sur la sortie) | un regen 6.12 liste F1–F5 ; un regen 6.8 en liste moins |
 | **P-A** | Typesystem : `QFileDevice::MemoryMapFlag` + `flags=`, `QLibraryInfo::LibraryPath`, `QLineF::IntersectionType`, `QBasicReadWriteLock`, `QAbstractFileIconProvider` (+`IconType`, `Option/Options`), `QTimeZone::OffsetData` ; puis retirer les **deux enums morts** de `QPinchGesture` (`WhatChange`, `ChangeFlag` — classe non liée). `QFileIconProvider::IconType` **n'est pas** mort : il est émis, et la mesure de surface ne voit pas les enums | `typesystem_core.xml`, `typesystem_gui.xml`, `typesystem_widgets.xml` | 7 lignes | **nul** (miroir de `QBasicMutex`) | `F…` présents au runtime ; `test.ps1` vert ; paire CI 6.8/6.12 |
 | **P-C** | Parseur : propager `static` (formes P4/P5/P7) — **complété le 19/10/2026** : les deux gardes `!hasFunSpec` tombent et la garde `friend` de `abstractmetabuilder` laisse passer les définitions *hidden friend* | `parser/parser.cpp`, `abstractmetabuilder.cpp` | 3 formes | faible (reclasser des méthodes) | **fait** : surface 8 852 → 8 861, `QPoint[F]::dotProduct` statiques, 22 suites vertes |
-| **P-G** | Parseur : conserver l'**ordre de déclaration** des enums (`_ScopeModelItem::enums()` renvoyait `QHash::values()`) | `parser/codemodel.{h,cpp}` | F7 | faible | **fait** : deux graines de hachage ⇒ arbre identique au byte ; `QSizePolicy` à ses 7 valeurs |
+| **P-G** | Parseur : conserver l'**ordre de déclaration** des enums (`_ScopeModelItem::enums()` renvoyait `QHash::values()`) | `parser/codemodel.{h,cpp}` | F7 | faible | **fait** : deux graines de hachage ⇒ arbre identique au byte ; `QSizePolicy` à ses 7 valeurs ; l'axe
+        `classes()` est traité en complément par F8 (`423dfac`, valeurs inter-classes) |
 | **P-B** | Parseur : accepter les ref-qualifiers (`const &` lié, `&&` écarté) — **livré `d0b1a62`**, avec le refus nommé des retours `auto` (F1.2) | `parser/parser.cpp`, `parser/ast.h`, `parser/binder.cpp`, `parser/codemodel.*`, `abstractmetabuilder.*` | famille F1 | moyen (déduplication des surcharges) | **fait** : `QByteArray` 13 + `QImage` 4 présents, 0 perdu, 22 suites vertes sur 6.12 |
-| **P-D** | Aplatissement : résoudre les typedefs internes (`parameter_type`, `rvalue_ref`, `value_type`, `AT`) et suivre les `using` de base — **livré `84eb2d7` (option B) + `2019394` (P-D1)** ; P-D2 (templates de fonction) reste une perte à documenter | `abstractmetabuilder.cpp` (`AbstractMetaBuilder`, remplissage des instanciations) | F5 | moyen | **fait** : +30 noms, 0 perdu sur 6.12 ; `collections-smoke.js` 122 références, 0 insatisfaite |
+| **P-D** | Aplatissement : résoudre les typedefs internes (`parameter_type`, `rvalue_ref`, `value_type`, `AT`) et suivre les `using` de base — **livré `84eb2d7` (option B) + `2019394` (P-D1)** ; P-D2 (templates de fonction) est désormais inscrit comme perte définitive (§F5/P-D2) | `abstractmetabuilder.cpp` (`AbstractMetaBuilder`, remplissage des instanciations) | F5 | moyen | **fait** : +30 noms, 0 perdu sur 6.12 ; `collections-smoke.js` 122 références, 0 insatisfaite |
 | **P-F** | Aplatissement : ne recopier qu'une fois un membre dont la `minimalSignature()` est déjà héritée — **livré `b5c9dee`** (F5.1) | `abstractmetabuilder.cpp` (`inheritTemplate()`) | F5.1 | faible (le doublon est déclaré tel quel dans le template) | **fait** : sonde A/B, 3 branches → 2 ; 6.12 byte-identique |
 
 Ordre : **P-E → P-A → P-C → P-B → P-D → P-F**. Livrés : P-E/P-A (`3f0899e`), F5 en option B (`84eb2d7`),
 P-B (`d0b1a62`, assertion versionnée `1286571`), P-D1 (`2019394`, suite `1074a13`), P-C (`a54e49b`),
-P-G (`6bc3c1a`), P-F (`b5c9dee`). Après chaque étape :
+P-G (`6bc3c1a`), P-F (`b5c9dee`), F8 (résolution à la demande B + `classes()` ordonnée C, `423dfac`).
+Après chaque étape :
 regen 6.12 locale → `build.ps1` → `test.ps1` → push `qt6` →
 vérification de la paire CI 6.8.3 + 6.12 (les artefacts CI 6.8/6.12 servent de mesure de non-régression).
 
@@ -500,7 +547,9 @@ vérification de la paire CI 6.8.3 + 6.12 (les artefacts CI 6.8/6.12 servent de 
   (ref-qualifiers + refus `auto`), `1286571` (assertion versionnée), `2019394` (P-D1 : alias
   `parameter_type` + retour instancié), `1074a13` (suite collections), `a54e49b` (P-C : `static` + *hidden
   friends*), `c1982e5` (deux enums morts de `QPinchGesture`), `6bc3c1a` (P-G : ordre de déclaration des
-  enums), `a23b479` (mécanisme B : un journal de rejets par module + budget), `b5c9dee` (P-F : F5.1).
+  enums), `a23b479` (mécanisme B : un journal de rejets par module + budget), `b5c9dee` (P-F : F5.1),
+  `ca0ec36` (ce rapport), `423dfac` (F8 : valeurs d'enum inter-classes, résolution à la demande +
+  `classes()` en ordre de déclaration).
   Seuls `.cmake/` et `.cmake612-rwdi/` restent non suivis (préexistants).
 * Les runs de sonde et de génération ont réécrit `generator/.preprocessed.tmp`, `generator/mjb_*.log`
   et `generated_cpp/` (tous **ignorés** par git).
