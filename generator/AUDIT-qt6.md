@@ -43,6 +43,10 @@ bindings n'a reçu aucune modification. Paire CI verte sur `ca0ec36` (6.12 `3941
    livré et branché lui aussi : `tools/surface-contract.ps1` + **un contrat par ligne Qt**
    (`generator/surface-contract.json` 6.12 : 457 classes / 8 861 membres ;
    `generator/surface-contract-qt683.json` 6.8.3 : 456 / 8 790), check après la génération — voir §5.A.
+   Les **valeurs** et la **construction** sont vérifiées de la même façon, par des suites engendrées
+   depuis l'arbre généré : les **4 823 constantes** des 473 enums sont comparées à un oracle compilé
+   contre les en-têtes Qt, et les 457 classes sont enregistrées, dotées d'un prototype, puis construites
+   pour les 381 qui ont un constructeur sans argument — voir §5.C.
 
 ---
 
@@ -526,10 +530,28 @@ Conséquences sur le plan :
   module sont joints à l'artefact `generated-cpp`.
   Le journal reste utile aux deux autres volets : déclaration de typesystem introuvable dans le DOM
   (`enum-type`, `object-type`, `flags=`), classe de base absente, signature d'aplatissement non résolue.
-* **C — suite de présence runtime** : couvrir en priorité F1–F5 (sondes `left/mid/trimmed`,
-  `QUuid.createUuid`, `QPoint.dotProduct`, `QReadWriteLock.lockForRead`, `QPolygon.at/indexOf`,
-  `QFileDevice.MemoryMapFlags`, `QLibraryInfo.LibraryPath`, `QLineF.IntersectionType`,
-  `QFileIconProvider.type`) ; rappel : dans `qs_eval`, `throw new Error(...)` (jamais `throw "…"`).
+* **C — suites engendrées depuis l'arbre généré** : plutôt que des sondes choisies à la main pour
+  F1–F5, trois suites sont **reconstruites à chaque run** à partir de `generated_cpp/`, donc sans
+  référence versionnée et sur les deux lignes Qt :
+  * `tools/surface-coverage.ps1` → 457 classes / 8 861 membres joignables (livré avec A) ;
+  * `tools/enum-values.ps1` → **473 enums, 4 823 constantes** : un oracle C++ (`printf` de chaque
+    constante castée `long long`, compilé avec `cl` + en-têtes Qt) dit ce que **Qt** répond, la suite
+    compare avec la valeur que les bindings exposent au runtime (repli `Class.Key` puis
+    `Class.Enum.Key`). L'identité d'une constante est lue dans le **nom du tableau**
+    (`qtscript_<Class>_<Enum>_values`) et non dans le type déclaré : les enums globaux (`QtMsgType`)
+    sont attachés par le binding à `Global`. Un écart **valeurs/clés** est une erreur bloquante, pas un
+    cas à ignorer — c'est exactement la forme de F8 (1 valeur, 11 clés) ;
+  * `tools/construction-sweep.ps1` → les 457 classes doivent être des fonctions enregistrées, porter un
+    prototype et — quand le générateur émet un constructeur sans argument (381 classes) — construire un
+    objet par `new Class()`. La détection se borne au `case 0` de `qtscript_<Class>_static_call`,
+    jusqu'au `break;` : `QItemSelection::maxSize` (case 2, 0 argument) a servi de faux positif. Un
+    constructeur peut tuer le process sans lever : la suite écrit la classe en cours dans un fichier de
+    progression (`logs/construction-smoke.progress.txt`) avant chaque tentative.
+  Contrôles négatifs joués : valeur d'enum falsifiée ⇒ `Forward = 0, Qt says 1` ; arbre façon F8 ⇒
+  `LocalSocketError (1 values for 11 keys)` ; classe renommée ⇒ `QPolygonTypo is not a constructor
+  function` ; constructeur inexistant déclaré présent ⇒ `QItemSelection new QItemSelection() threw`.
+  Rappel : dans `qs_eval`, `throw new Error(...)` (jamais `throw "…"`) ; `print()` n'écrit que sur
+  stdout du process, inutilisable comme assertion.
 * **D — `test.ps1` en découverte automatique** (`tests/*-smoke.js`) : inchangé.
 
 ---
@@ -572,7 +594,11 @@ vérification de la paire CI 6.8.3 + 6.12 (les artefacts CI 6.8/6.12 servent de 
   `39475844690`), `b2ac740` (C4715 : les wrappers de virtuelles pures sont émis avec
   `Q_UNREACHABLE_RETURN(<défaut>)` après le `qFatal` — Qt ne marque `qFatal` noreturn que hors MSVC
   (`qlogging.h` L67-70), les 85 avertissements de build disparaissent sans toucher au code curé ;
-  surface inchangée, 25 suites vertes).
+  surface inchangée, 25 suites vertes), `T1/T2` (deux suites engendrées : `tools/enum-values.ps1`,
+  473 enums / 4 823 constantes contre un oracle C++ compilé sur les en-têtes Qt ; `tools/construction-sweep.ps1`,
+  457 classes enregistrées + 381 constructeurs sans argument exécutés ; switchs `-SkipEnumValues` et
+  `-SkipConstructionSweep` dans `test.ps1` ; en local sur 6.12 : 22 suites + les trois suites engendrées
+  vertes, 159 s pour la configuration `Release`).
   Seuls `.cmake/` et `.cmake612-rwdi/` restent non suivis (préexistants).
 * Les runs de sonde et de génération ont réécrit `generator/.preprocessed.tmp`, `generator/mjb_*.log`
   et `generated_cpp/` (tous **ignorés** par git).

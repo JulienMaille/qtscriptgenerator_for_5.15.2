@@ -13,7 +13,19 @@ param(
     # The surface coverage suite is built from generated_cpp/ on every run and
     # needs no switch. This drops it, for a quick local loop only: the emitted
     # class and member surface is then not verified.
-    [switch] $SkipSurfaceCoverage
+    [switch] $SkipSurfaceCoverage,
+
+    # The enum values suite compiles, from the same generated constants, a small
+    # program against the Qt headers and compares what Qt answers with what the
+    # bindings expose at runtime. It needs $QtPrefix, hence the switch for a
+    # loop that runs on bindings only; skipping it leaves enum values unverified.
+    [switch] $SkipEnumValues,
+
+    # The construction sweep registers every emitted class, checks its prototype
+    # and runs every emitted no-argument constructor. Constructing the whole
+    # surface takes about a minute per configuration; skipping it leaves class
+    # registration and construction unverified.
+    [switch] $SkipConstructionSweep
 )
 
 $ErrorActionPreference = "Stop"
@@ -79,16 +91,49 @@ if ($smokeTests.Count -eq 0) {
 # generated_cpp/ is reachable from script in the bindings built from it. It is
 # derived from the generated projects and written under logs/, so no generated
 # file is committed and the suite follows the Qt version that was generated.
+#
+# The enum values suite reads the same tree: the generated `_values[]` arrays
+# name Qt constants, so an oracle compiled against the Qt headers says what each
+# one is worth, independently of the generator's own resolution (F7 and F8 were
+# both wrong values that no surface check could see).
+$generatedRoot = Join-Path $PSScriptRoot "generated_cpp"
+$generatedRootAvailable = Test-Path -LiteralPath $generatedRoot -PathType Container
+
 $surfaceCoverageSuite = $null
 if ($SkipSurfaceCoverage) {
     Write-Warning "Surface coverage suite skipped: the emitted class and member surface is not verified."
 } else {
-    $generatedRoot = Join-Path $PSScriptRoot "generated_cpp"
-    if (-not (Test-Path -LiteralPath $generatedRoot -PathType Container)) {
+    if (-not $generatedRootAvailable) {
         throw "generated_cpp/ is missing and the surface coverage suite is built from it. Run generator\regen-all.ps1 first, or pass -SkipSurfaceCoverage to run without it."
     }
     $surfaceCoverageSuite = Join-Path $logRoot "surface-coverage-smoke.js"
     & (Join-Path $PSScriptRoot "tools\surface-coverage.ps1") -GeneratedRoot $generatedRoot -OutputPath $surfaceCoverageSuite
+}
+
+$enumValuesSuite = $null
+if ($SkipEnumValues) {
+    Write-Warning "Enum values suite skipped: enum constants are not compared with the values Qt gives them."
+} else {
+    if (-not $generatedRootAvailable) {
+        throw "generated_cpp/ is missing and the enum values suite is built from it. Run generator\regen-all.ps1 first, or pass -SkipEnumValues to run without it."
+    }
+    $enumValuesSuite = Join-Path $logRoot "enum-values-smoke.js"
+    & (Join-Path $PSScriptRoot "tools\enum-values.ps1") -GeneratedRoot $generatedRoot -QtPrefix $QtPrefix -OutputPath $enumValuesSuite
+}
+
+# The construction sweep reads the same tree: it registers every emitted class,
+# checks its prototype and constructs the ones the generator gave a no-argument
+# constructor. It is derived from the generated projects, so it follows the Qt
+# version that was built and needs no baseline.
+$constructionSweepSuite = $null
+if ($SkipConstructionSweep) {
+    Write-Warning "Construction sweep skipped: class registration and no-argument construction are not verified."
+} else {
+    if (-not $generatedRootAvailable) {
+        throw "generated_cpp/ is missing and the construction sweep is built from it. Run generator\regen-all.ps1 first, or pass -SkipConstructionSweep to run without it."
+    }
+    $constructionSweepSuite = Join-Path $logRoot "construction-smoke.js"
+    & (Join-Path $PSScriptRoot "tools\construction-sweep.ps1") -GeneratedRoot $generatedRoot -OutputPath $constructionSweepSuite
 }
 
 function Invoke-Evaluator {
@@ -174,6 +219,18 @@ foreach ($name in $configurations) {
         Invoke-Evaluator -Evaluator $evaluator -Arguments @($surfaceCoverageSuite) `
             -Label "$name-surface-coverage-smoke" -TimeoutMilliseconds $EvaluatorTimeoutMilliseconds
         Write-Host "surface-coverage-smoke.js passed: $name (every emitted class and member is reachable)"
+    }
+
+    if ($enumValuesSuite) {
+        Invoke-Evaluator -Evaluator $evaluator -Arguments @($enumValuesSuite) `
+            -Label "$name-enum-values-smoke" -TimeoutMilliseconds $EvaluatorTimeoutMilliseconds
+        Write-Host "enum-values-smoke.js passed: $name (every emitted enum constant has the value Qt gives it)"
+    }
+
+    if ($constructionSweepSuite) {
+        Invoke-Evaluator -Evaluator $evaluator -Arguments @($constructionSweepSuite) `
+            -Label "$name-construction-smoke" -TimeoutMilliseconds $EvaluatorTimeoutMilliseconds
+        Write-Host "construction-smoke.js passed: $name (every emitted class is registered and every no-argument constructor runs)"
     }
 
     foreach ($smokeTest in $smokeTests) {
