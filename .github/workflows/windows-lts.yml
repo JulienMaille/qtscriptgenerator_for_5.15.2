@@ -79,6 +79,14 @@ jobs:
           -ApplyCurated
           -PublishRoot $env:GITHUB_WORKSPACE
 
+      - name: Check the reject budget
+        shell: pwsh
+        # The reject budget was seeded once and for all from Qt 6.12 and Qt
+        # 6.8.3 logs (tools/reject-budget.ps1 -Update, "the larger count wins").
+        # A count that grows here means a member this CI just lost: fail before
+        # the build instead of shipping bindings with a hole.
+        run: .\tools\reject-budget.ps1 -LogRoot ${env:GITHUB_WORKSPACE}\regen-test\logs
+
       - name: Build bindings
         shell: pwsh
         run: .\build.ps1 -QtPrefix $env:QT_ROOT_DIR -Configuration Release
