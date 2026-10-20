@@ -23,7 +23,7 @@ bindings n'a reçu aucune modification. Paire CI verte sur `ca0ec36` (6.12 `3941
 3. Ce qui reste est **court** : **5 familles de pertes réelles** (F1–F5, chacune avec cause racine isolée
    par reproduction minimale), **1 famille de rejets journalisés** (F6) à trier et **2 défauts de
    reproductibilité** (F7, F8) qui touchent les *valeurs d'enum*.
-   **État au 20/10/2026 :** F1 corrigé (`d0b1a62`), F2 corrigé (`a54e49b`, surface 8 852 → 8 861),
+   **État au 21/10/2026 :** F1 corrigé (`d0b1a62`), F2 corrigé (`a54e49b`, surface 8 852 → 8 861),
    F5 livré en option B (`84eb2d7`) puis P-D1 (`2019394`) puis F5.1 (`b5c9dee`), F7 corrigé
    (`6bc3c1a`, arbre reproductible, `QSizePolicy` à ses 7 valeurs), F8 corrigé (`423dfac`,
    `QLocalSocket::LocalSocketError` à ses 11 valeurs sur 6 regens non seedés). Les runs CI 6.12
@@ -556,7 +556,7 @@ Conséquences sur le plan :
 
 ---
 
-## 6. Propositions (ordre conseillé, état au 20/10/2026)
+## 6. Propositions (ordre conseillé, état au 21/10/2026)
 
 | # | Correctif | Fichier(s) | Portée | Risque | Preuve attendue |
 | --- | --- | --- | --- | --- | --- |

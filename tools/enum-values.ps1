@@ -63,7 +63,6 @@ function Read-EnumBlocks([string] $root) {
         $module = $file.Directory.Name
         # static const <Type> qtscript_<Class>_<Enum>_values[] = { ... };
         foreach ($m in [regex]::Matches($text, 'static const\s+([^\r\n]+?)\s+(qtscript_\w+_values)\[\]\s*=\s*\{(.*?)\};', 'Singleline')) {
-            $declType = $m.Groups[1].Value.Trim()
             $valuesName = $m.Groups[2].Value
             $valuesBody = $m.Groups[3].Value
 
