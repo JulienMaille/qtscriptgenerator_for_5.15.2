@@ -550,6 +550,9 @@ Conséquences sur le plan :
   Contrôles négatifs joués : valeur d'enum falsifiée ⇒ `Forward = 0, Qt says 1` ; arbre façon F8 ⇒
   `LocalSocketError (1 values for 11 keys)` ; classe renommée ⇒ `QPolygonTypo is not a constructor
   function` ; constructeur inexistant déclaré présent ⇒ `QItemSelection new QItemSelection() threw`.
+  Les deux lignes CI les exécutent : 6.12 → 4 823 constantes, 457 classes, 381 constructeurs ;
+  6.8.3 → 4 795 constantes, 456 classes, 380 constructeurs (runs verts `39510013367` et
+  `39510013571`, commit `7e5ad58`).
   Rappel : dans `qs_eval`, `throw new Error(...)` (jamais `throw "…"`) ; `print()` n'écrit que sur
   stdout du process, inutilisable comme assertion.
 * **D — `test.ps1` en découverte automatique** (`tests/*-smoke.js`) : inchangé.
@@ -598,7 +601,8 @@ vérification de la paire CI 6.8.3 + 6.12 (les artefacts CI 6.8/6.12 servent de 
   473 enums / 4 823 constantes contre un oracle C++ compilé sur les en-têtes Qt ; `tools/construction-sweep.ps1`,
   457 classes enregistrées + 381 constructeurs sans argument exécutés ; switchs `-SkipEnumValues` et
   `-SkipConstructionSweep` dans `test.ps1` ; en local sur 6.12 : 22 suites + les trois suites engendrées
-  vertes, 159 s pour la configuration `Release`).
+  vertes, 159 s pour la configuration `Release` ; CI verte sur les deux lignes (`39510013367` 6.8.3,
+  `39510013571` 6.12)).
   Seuls `.cmake/` et `.cmake612-rwdi/` restent non suivis (préexistants).
 * Les runs de sonde et de génération ont réécrit `generator/.preprocessed.tmp`, `generator/mjb_*.log`
   et `generated_cpp/` (tous **ignorés** par git).
