@@ -81,11 +81,14 @@ jobs:
 
       - name: Check the surface contract
         shell: pwsh
-        # The contract lists every class and member the bindings of the last
-        # review emitted. A name in the contract missing from the fresh tree
-        # fails here, before the build: the complement of the reject budget,
-        # which only sees what the generator logs.
-        run: .\tools\surface-contract.ps1 -GeneratedRoot .\generated_cpp
+        # Contracts are per Qt line: the two lines emit slightly different
+        # surfaces (Qt-side additions and removals), so each workflow checks its
+        # own committed contract. A name in the contract missing from the fresh
+        # tree fails here, before the build: the complement of the reject
+        # budget, which only sees what the generator logs.
+        run: >-
+          .\tools\surface-contract.ps1 -GeneratedRoot .\generated_cpp
+          -Contract .\generator\surface-contract-qt683.json
 
       - name: Check the reject budget
         shell: pwsh
